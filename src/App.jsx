@@ -1,5 +1,10 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
+import PrivateRoute from './components/PrivateRoute'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import Profile from './pages/Profile'
 import Dashboard from './pages/Dashboard'
 import Categories from './pages/Categories'
 import Colors from './pages/Colors'
@@ -12,19 +17,100 @@ import BulkGeneration from './pages/BulkGeneration'
 
 function App() {
   return (
-    <Layout>
+    <AuthProvider>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/scanner" element={<BarcodeScanner />} />
-        <Route path="/bulk-generation" element={<BulkGeneration />} />
-        <Route path="/categories" element={<Categories />} />
-        <Route path="/colors" element={<Colors />} />
-        <Route path="/sizes" element={<Sizes />} />
-        <Route path="/rayons" element={<Rayons />} />
-        <Route path="/products" element={<Products />} />
-        <Route path="/products/:id" element={<ProductDetails />} />
+        {/* Public Routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        {/* Protected Routes */}
+        <Route element={<Layout />}>
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <PrivateRoute>
+                <Profile />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/scanner"
+            element={
+              <PrivateRoute>
+                <BarcodeScanner />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/bulk-generation"
+            element={
+              <PrivateRoute requireManager>
+                <BulkGeneration />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/categories"
+            element={
+              <PrivateRoute>
+                <Categories />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/colors"
+            element={
+              <PrivateRoute>
+                <Colors />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/sizes"
+            element={
+              <PrivateRoute>
+                <Sizes />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/rayons"
+            element={
+              <PrivateRoute>
+                <Rayons />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/products"
+            element={
+              <PrivateRoute>
+                <Products />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/products/:id"
+            element={
+              <PrivateRoute>
+                <ProductDetails />
+              </PrivateRoute>
+            }
+          />
+        </Route>
+
+        {/* Catch all - redirect to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Layout>
+    </AuthProvider>
   )
 }
 

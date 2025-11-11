@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { FaBarcode, FaCheck, FaTimes, FaBox } from 'react-icons/fa';
-import api from '../services/api-inventory';
+import api from '../services/api';
 
 export default function BarcodeScanner() {
   const [barcode, setBarcode] = useState('');

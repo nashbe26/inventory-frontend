@@ -10,7 +10,7 @@ import {
   FaFilePdf
 } from 'react-icons/fa';
 import { productService } from '../services';
-import api from '../services/api-inventory';
+import api from '../services/api';
 
 export default function BulkGeneration() {
   const [selectedProducts, setSelectedProducts] = useState([]);

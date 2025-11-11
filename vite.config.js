@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     port: 3004,
     proxy: {
-      '/api': {
+      '/api-inventory': {
         target: 'http://149.202.55.111:3009',
         changeOrigin: true
       }

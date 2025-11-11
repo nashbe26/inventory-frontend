@@ -1,4 +1,4 @@
-import api from './api';
+import api from './api-inventory';
 
 export const categoryService = {
   getAll: () => api.get('/categories'),
@@ -38,8 +38,8 @@ export const productService = {
   create: (data) => api.post('/products', data),
   update: (id, data) => api.put(`/products/${id}`, data),
   delete: (id) => api.delete(`/products/${id}`),
-  getBarcode: (id) => `/api/products/${id}/barcode`,
-  getDochette: (id) => `/api/products/${id}/dochette`
+  getBarcode: (id) => `/api-inventory/products/${id}/barcode`,
+  getDochette: (id) => `/api-inventory/products/${id}/dochette`
 };
 
 export const inventoryService = {

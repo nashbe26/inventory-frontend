@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }) => {
   // Load user from token
   const loadUser = async () => {
     try {
-      const response = await axios.get('/api/auth/me');
+      const response = await axios.get('/api-inventory/auth/me');
       setUser(response.data.data);
     } catch (error) {
       console.error('Failed to load user:', error);
@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }) => {
 
   // Login
   const login = async (email, password) => {
-    const response = await axios.post('/api/auth/login', { email, password });
+    const response = await axios.post('/api-inventory/auth/login', { email, password });
     const { token, data } = response.data;
     
     localStorage.setItem('token', token);
@@ -54,7 +54,7 @@ export const AuthProvider = ({ children }) => {
 
   // Register
   const register = async (name, email, password) => {
-    const response = await axios.post('/api/auth/register', { name, email, password });
+    const response = await axios.post('/api-inventory/auth/register', { name, email, password });
     const { token, data } = response.data;
     
     localStorage.setItem('token', token);
@@ -75,14 +75,14 @@ export const AuthProvider = ({ children }) => {
 
   // Update profile
   const updateProfile = async (name, email) => {
-    const response = await axios.put('/api/auth/profile', { name, email });
+    const response = await axios.put('/api-inventory/auth/profile', { name, email });
     setUser(response.data.data);
     return response.data.data;
   };
 
   // Change password
   const changePassword = async (currentPassword, newPassword) => {
-    const response = await axios.put('/api/auth/password', {
+    const response = await axios.put('/api-inventory/auth/password', {
       currentPassword,
       newPassword
     });

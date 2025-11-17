@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://tndeals.store/api-inventory';
+const API_BASE_URL = 'https://tndeals.store/api-inventory';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

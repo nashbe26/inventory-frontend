@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 
 const AuthContext = createContext();
 
@@ -16,10 +16,9 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('token'));
 
-  // Configure axios defaults
+  // Load user from token
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       loadUser();
     } else {
       setLoading(false);
@@ -29,7 +28,7 @@ export const AuthProvider = ({ children }) => {
   // Load user from token
   const loadUser = async () => {
     try {
-      const response = await axios.get('/api-inventory/auth/me');
+      const response = await api.get('/auth/me');
       setUser(response.data.data);
     } catch (error) {
       console.error('Failed to load user:', error);
@@ -41,28 +40,26 @@ export const AuthProvider = ({ children }) => {
 
   // Login
   const login = async (email, password) => {
-    const response = await axios.post('/api-inventory/auth/login', { email, password });
-    const { token, data } = response.data;
-    console.log(data)
-    console.log(token)
-    console.log(data.token)
-    localStorage.setItem('token', token.token);
-    setToken(token.token);
+    const response = await api.post('/auth/login', { email, password });
+    const { data } = response.data;
+    const token = data.token;
+    
+    localStorage.setItem('token', token);
+    setToken(token);
     setUser(data);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     
     return data;
   };
 
   // Register
   const register = async (name, email, password) => {
-    const response = await axios.post('/api-inventory/auth/register', { name, email, password });
+    const response = await api.post('/auth/register', { name, email, password });
     const { data } = response.data;
-    const token = data.token
+    const token = data.token;
+    
     localStorage.setItem('token', token);
     setToken(token);
     setUser(data);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     
     return data;
   };
@@ -72,19 +69,18 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
-    delete axios.defaults.headers.common['Authorization'];
   };
 
   // Update profile
   const updateProfile = async (name, email) => {
-    const response = await axios.put('/api-inventory/auth/profile', { name, email });
+    const response = await api.put('/auth/profile', { name, email });
     setUser(response.data.data);
     return response.data.data;
   };
 
   // Change password
   const changePassword = async (currentPassword, newPassword) => {
-    const response = await axios.put('/api-inventory/auth/password', {
+    const response = await api.put('/auth/password', {
       currentPassword,
       newPassword
     });
@@ -110,3 +106,4 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+

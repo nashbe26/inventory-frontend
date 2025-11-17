@@ -23,88 +23,32 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Protected Routes */}
-        <Route element={<Layout />}>
+        {/* Protected Routes with Layout */}
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <Layout />
+            </PrivateRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="scanner" element={<BarcodeScanner />} />
           <Route
-            path="/"
-            element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <PrivateRoute>
-                <Profile />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/scanner"
-            element={
-              <PrivateRoute>
-                <BarcodeScanner />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/bulk-generation"
+            path="bulk-generation"
             element={
               <PrivateRoute requireManager>
                 <BulkGeneration />
               </PrivateRoute>
             }
           />
-          <Route
-            path="/categories"
-            element={
-              <PrivateRoute>
-                <Categories />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/colors"
-            element={
-              <PrivateRoute>
-                <Colors />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/sizes"
-            element={
-              <PrivateRoute>
-                <Sizes />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/rayons"
-            element={
-              <PrivateRoute>
-                <Rayons />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/products"
-            element={
-              <PrivateRoute>
-                <Products />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/products/:id"
-            element={
-              <PrivateRoute>
-                <ProductDetails />
-              </PrivateRoute>
-            }
-          />
+          <Route path="categories" element={<Categories />} />
+          <Route path="colors" element={<Colors />} />
+          <Route path="sizes" element={<Sizes />} />
+          <Route path="rayons" element={<Rayons />} />
+          <Route path="products" element={<Products />} />
+          <Route path="products/:id" element={<ProductDetails />} />
         </Route>
 
         {/* Catch all - redirect to home */}

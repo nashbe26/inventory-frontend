@@ -14,6 +14,9 @@ import Products from './pages/Products'
 import ProductDetails from './pages/ProductDetails'
 import BarcodeScanner from './pages/BarcodeScanner'
 import BulkGeneration from './pages/BulkGeneration'
+import Orders from './pages/Orders'
+import Analytics from './pages/Analytics'
+import Expenses from './pages/Expenses'
 
 function App() {
   return (
@@ -49,6 +52,9 @@ function App() {
           <Route path="rayons" element={<Rayons />} />
           <Route path="products" element={<Products />} />
           <Route path="products/:id" element={<ProductDetails />} />
+          <Route path="orders" element={<Orders />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="expenses" element={<Expenses />} />
         </Route>
 
         {/* Catch all - redirect to home */}

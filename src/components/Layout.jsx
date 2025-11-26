@@ -10,7 +10,10 @@ import {
   FaBarcode,
   FaFileDownload,
   FaUser,
-  FaSignOutAlt
+  FaSignOutAlt,
+  FaShoppingCart,
+  FaChartBar,
+  FaMoneyBillWave
 } from 'react-icons/fa'
 
 export default function Layout() {
@@ -45,6 +48,21 @@ export default function Layout() {
             <li>
               <NavLink to="/scanner" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaBarcode /> Scanner
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaShoppingCart /> Orders
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/analytics" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaChartBar /> Analytics
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/expenses" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaMoneyBillWave /> Expenses
               </NavLink>
             </li>
             {isManager && (

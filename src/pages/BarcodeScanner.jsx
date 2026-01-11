@@ -151,28 +151,19 @@ export default function BarcodeScanner() {
             </div>
             <div>
               <strong>Color:</strong><br />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <div style={{
-                  width: '20px',
-                  height: '20px',
-                  backgroundColor: scannedProduct.colorId?.hexCode || '#ccc',
-                  border: '1px solid #ddd',
-                  borderRadius: '3px'
-                }}></div>
-                {scannedProduct.colorId?.name || 'N/A'}
-              </div>
+              {scannedProduct.color || 'N/A'}
             </div>
             <div>
               <strong>Size:</strong><br />
-              {scannedProduct.sizeId?.label || 'N/A'}
+              {scannedProduct.size || 'N/A'}
             </div>
             <div>
               <strong>New Quantity:</strong><br />
               <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#155724' }}>
-                {scannedProduct.quantity}
+                {scannedProduct.remainingQuantity}
               </span>
               {' '}
-              {getStockBadge(scannedProduct.quantity, scannedProduct.lowStockThreshold)}
+              {getStockBadge(scannedProduct.remainingQuantity, scannedProduct.lowStockThreshold)}
             </div>
           </div>
         </div>
@@ -219,29 +210,18 @@ export default function BarcodeScanner() {
                       {scan.success ? scan.product.name : scan.error || 'Failed'}
                     </td>
                     <td>{scan.success ? scan.product.sku : scan.barcode || '-'}</td>
-                    <td>{scan.success ? scan.product.categoryId?.name : '-'}</td>
+                    <td>{scan.success ? scan.product.categoryName : '-'}</td>
                     <td>
-                      {scan.success && scan.product.colorId ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <div style={{
-                            width: '20px',
-                            height: '20px',
-                            backgroundColor: scan.product.colorId.hexCode,
-                            border: '1px solid #ddd',
-                            borderRadius: '3px'
-                          }}></div>
-                          {scan.product.colorId.name}
-                        </div>
-                      ) : '-'}
+                      {scan.success ? (scan.product.color || '-') : '-'}
                     </td>
                     <td>
                       {scan.success ? (
-                        <strong>{scan.product.quantity}</strong>
+                        <strong>{scan.product.remainingQuantity}</strong>
                       ) : '-'}
                     </td>
                     <td>
                       {scan.success && getStockBadge(
-                        scan.product.quantity, 
+                        scan.product.remainingQuantity, 
                         scan.product.lowStockThreshold
                       )}
                     </td>

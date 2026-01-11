@@ -8,7 +8,7 @@ import Modal from '../components/Modal';
 export default function Categories() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
-  const [formData, setFormData] = useState({ name: '', code: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', code: '', description: '', type: 'men' });
   
   const queryClient = useQueryClient();
 
@@ -61,11 +61,12 @@ export default function Categories() {
       setFormData({ 
         name: category.name, 
         code: category.code, 
-        description: category.description || '' 
+        description: category.description || '',
+        type: category.type || 'men'
       });
     } else {
       setEditingCategory(null);
-      setFormData({ name: '', code: '', description: '' });
+      setFormData({ name: '', code: '', description: '', type: 'men' });
     }
     setIsModalOpen(true);
   };
@@ -73,7 +74,7 @@ export default function Categories() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingCategory(null);
-    setFormData({ name: '', code: '', description: '' });
+    setFormData({ name: '', code: '', description: '', type: 'men' });
   };
 
   const handleSubmit = (e) => {
@@ -109,6 +110,7 @@ export default function Categories() {
               <tr>
                 <th>Code</th>
                 <th>Name</th>
+                <th>Type</th>
                 <th>Description</th>
                 <th>Actions</th>
               </tr>
@@ -118,6 +120,11 @@ export default function Categories() {
                 <tr key={category._id}>
                   <td><strong>{category.code}</strong></td>
                   <td>{category.name}</td>
+                  <td>
+                    <span className={`badge ${category.type === 'men' ? 'badge-info' : 'badge-success'}`}>
+                      {category.type === 'men' ? 'Men' : 'Women'}
+                    </span>
+                  </td>
                   <td>{category.description || '-'}</td>
                   <td>
                     <button 
@@ -162,6 +169,18 @@ export default function Categories() {
               onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
               required
             />
+          </div>
+          <div className="form-group">
+            <label>Type *</label>
+            <select
+              className="form-control"
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              required
+            >
+              <option value="men">Men</option>
+              <option value="women">Women</option>
+            </select>
           </div>
           <div className="form-group">
             <label>Description</label>

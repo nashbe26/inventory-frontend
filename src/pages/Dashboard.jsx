@@ -31,7 +31,7 @@ export default function Dashboard() {
 
       <div className="stats-grid">
         <div className="stat-card">
-          <h3>Total Products</h3>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Products</h3>
           <div className="stat-value" style={{ color: 'var(--primary-color)' }}>
             <FaBoxes style={{ display: 'inline', marginRight: '10px' }} />
             {stats?.totalProducts || 0}
@@ -39,7 +39,7 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <h3>Total Quantity</h3>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Quantity</h3>
           <div className="stat-value" style={{ color: 'var(--success-color)' }}>
             {stats?.totalQuantity || 0}
           </div>
@@ -49,7 +49,7 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <h3>Low Stock Alert</h3>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Low Stock Alert</h3>
           <div className="stat-value" style={{ color: 'var(--warning-color)' }}>
             <FaExclamationTriangle style={{ display: 'inline', marginRight: '10px' }} />
             {stats?.lowStockCount || 0}
@@ -57,7 +57,7 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <h3>Out of Stock</h3>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Out of Stock</h3>
           <div className="stat-value" style={{ color: 'var(--danger-color)' }}>
             <FaTimesCircle style={{ display: 'inline', marginRight: '10px' }} />
             {stats?.outOfStockCount || 0}
@@ -65,10 +65,9 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <h3>Total Value</h3>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Value</h3>
           <div className="stat-value" style={{ color: 'var(--primary-color)' }}>
-            <FaDollarSign style={{ display: 'inline', marginRight: '5px' }} />
-            {stats?.totalValue?.toFixed(2) || '0.00'}
+            {stats?.totalValue?.toFixed(2) || '0.00'} dt
           </div>
         </div>
       </div>
@@ -77,7 +76,7 @@ export default function Dashboard() {
         <>
           {lowStockData.lowStock?.length > 0 && (
             <div className="card">
-              <h2 style={{ marginBottom: '20px', color: 'var(--warning-color)' }}>
+              <h2 style={{ marginBottom: '20px', color: 'var(--warning-color)', fontSize: '1rem', fontWeight: '600' }}>
                 ⚠️ Low Stock Products
               </h2>
               <div className="table-container">
@@ -113,7 +112,7 @@ export default function Dashboard() {
 
           {lowStockData.outOfStock?.length > 0 && (
             <div className="card">
-              <h2 style={{ marginBottom: '20px', color: 'var(--danger-color)' }}>
+              <h2 style={{ marginBottom: '20px', color: 'var(--danger-color)', fontSize: '1rem', fontWeight: '600' }}>
                 ❌ Out of Stock Products
               </h2>
               <div className="table-container">

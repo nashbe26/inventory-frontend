@@ -9,7 +9,8 @@ const Register = () => {
     name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    organizationName: ''
   });
   const [loading, setLoading] = useState(false);
 
@@ -44,7 +45,7 @@ const Register = () => {
     setLoading(true);
 
     try {
-      await register(formData.name, formData.email, formData.password);
+      await register(formData.name, formData.email, formData.password, formData.organizationName || null);
       toast.success('Registration successful!');
       navigate('/');
     } catch (error) {
@@ -124,6 +125,23 @@ const Register = () => {
               placeholder="Confirm your password"
               required
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="organizationName">
+              <FaUser /> Organization Name (Optional)
+            </label>
+            <input
+              type="text"
+              id="organizationName"
+              name="organizationName"
+              value={formData.organizationName}
+              onChange={handleChange}
+              placeholder="Create your organization or join later"
+            />
+            <small className="text-gray-500 text-xs mt-1 block">
+              Leave empty if you have an invitation code
+            </small>
           </div>
 
           <button type="submit" className="btn-primary" disabled={loading}>

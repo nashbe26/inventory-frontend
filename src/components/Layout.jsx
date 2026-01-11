@@ -13,6 +13,7 @@ import {
   FaSignOutAlt,
   FaShoppingCart,
   FaChartBar,
+  FaUsers,
   FaMoneyBillWave
 } from 'react-icons/fa'
 
@@ -101,6 +102,9 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
+          <NavLink to="/organization" className={({ isActive }) => isActive ? 'active' : ''}>
+            <FaUsers /> Organization
+          </NavLink>
           <NavLink to="/profile" className={({ isActive }) => isActive ? 'active' : ''}>
             <FaUser /> Profile
           </NavLink>

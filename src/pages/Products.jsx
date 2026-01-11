@@ -19,10 +19,14 @@ export default function Products() {
   });
   const [page, setPage] = useState(1);
   const [formData, setFormData] = useState({
-    name: '', sku: '', categoryId: '', colorId: '', sizeId: '', rayonId: '',
-    quantity: 0, price: '', description: '', lowStockThreshold: 10
+    name: '', categoryId: '', rayonId: '',
+    price: '', description: '', lowStockThreshold: 10,
+    variants: []
   });
-  
+
+  // State for new variant entry
+  const [newVariant, setNewVariant] = useState({ colorId: '', sizeId: '', quantity: 0 });
+
   const queryClient = useQueryClient();
 
   // Fetch products
@@ -100,29 +104,53 @@ export default function Products() {
       setEditingProduct(product);
       setFormData({
         name: product.name,
-        sku: product.sku,
         categoryId: product.categoryId?._id || '',
-        colorId: product.colorId?._id || '',
-        sizeId: product.sizeId?._id || '',
         rayonId: product.rayonId?._id || '',
-        quantity: product.quantity,
         price: product.price || '',
         description: product.description || '',
-        lowStockThreshold: product.lowStockThreshold || 10
+        lowStockThreshold: product.lowStockThreshold || 10,
+        variants: product.variants.map(v => ({
+             colorId: v.colorId?._id || v.colorId,
+             sizeId: v.sizeId?._id || v.sizeId,
+             quantity: v.quantity,
+             sku: v.sku,
+             barcode: v.barcode,
+             _id: v._id
+        }))
       });
     } else {
       setEditingProduct(null);
       setFormData({
-        name: '', sku: '', categoryId: '', colorId: '', sizeId: '', rayonId: '',
-        quantity: 0, price: '', description: '', lowStockThreshold: 10
+        name: '', categoryId: '', rayonId: '',
+        price: '', description: '', lowStockThreshold: 10,
+        variants: []
       });
     }
+    setNewVariant({ colorId: '', sizeId: '', quantity: 0 });
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingProduct(null);
+  };
+
+  const addVariant = () => {
+      if(!newVariant.colorId || !newVariant.sizeId) {
+          toast.error("Color and Size are required");
+          return;
+      }
+      setFormData({
+          ...formData,
+          variants: [...formData.variants, { ...newVariant }]
+      });
+      setNewVariant({ colorId: '', sizeId: '', quantity: 0 }); // Reset
+  };
+
+  const removeVariant = (index) => {
+      const newVariants = [...formData.variants];
+      newVariants.splice(index, 1);
+      setFormData({ ...formData, variants: newVariants });
   };
 
   const handleSubmit = (e) => {
@@ -141,9 +169,10 @@ export default function Products() {
   };
 
   const getStockBadge = (product) => {
-    if (product.quantity === 0) {
+    const totalQty = product.totalQuantity || 0;
+    if (totalQty === 0) {
       return <span className="badge badge-danger">Out of Stock</span>;
-    } else if (product.quantity <= product.lowStockThreshold) {
+    } else if (totalQty <= product.lowStockThreshold) {
       return <span className="badge badge-warning">Low Stock</span>;
     } else {
       return <span className="badge badge-success">In Stock</span>;
@@ -189,7 +218,7 @@ export default function Products() {
             value={filters.colorId}
             onChange={(e) => setFilters({ ...filters, colorId: e.target.value })}
           >
-            <option value="">All Colors</option>
+            <option value="">All Colors (Any Variant)</option>
             {colors?.map(color => (
               <option key={color._id} value={color._id}>{color.name}</option>
             ))}
@@ -199,7 +228,7 @@ export default function Products() {
             value={filters.sizeId}
             onChange={(e) => setFilters({ ...filters, sizeId: e.target.value })}
           >
-            <option value="">All Sizes</option>
+            <option value="">All Sizes (Any Variant)</option>
             {sizes?.map(size => (
               <option key={size._id} value={size._id}>{size.label}</option>
             ))}
@@ -213,12 +242,11 @@ export default function Products() {
           <table>
             <thead>
               <tr>
-                <th>SKU</th>
                 <th>Name</th>
                 <th>Category</th>
-                <th>Color</th>
-                <th>Size</th>
-                <th>Quantity</th>
+                <th>Rayon</th>
+                <th>Variants</th>
+                <th>Tot. Qty</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -226,23 +254,11 @@ export default function Products() {
             <tbody>
               {productsData?.data?.map((product) => (
                 <tr key={product._id}>
-                  <td><strong>{product.sku}</strong></td>
-                  <td>{product.name}</td>
+                  <td><strong>{product.name}</strong></td>
                   <td>{product.categoryId?.name}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{
-                        width: '20px',
-                        height: '20px',
-                        backgroundColor: product.colorId?.hexCode,
-                        borderRadius: '4px',
-                        border: '1px solid var(--border-color)'
-                      }} />
-                      {product.colorId?.name}
-                    </div>
-                  </td>
-                  <td>{product.sizeId?.label}</td>
-                  <td>{product.quantity}</td>
+                  <td>{product.rayonId?.name}</td>
+                  <td>{product.variants?.length || 0} variants</td>
+                  <td>{product.totalQuantity}</td>
                   <td>{getStockBadge(product)}</td>
                   <td>
                     <button 
@@ -294,7 +310,7 @@ export default function Products() {
 
       {/* Product Form Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingProduct ? 'Edit Product' : 'Add Product'}>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} style={{maxWidth: '800px'}}>
           <div className="form-group">
             <label>Product Name *</label>
             <input
@@ -305,16 +321,7 @@ export default function Products() {
               required
             />
           </div>
-          <div className="form-group">
-            <label>SKU *</label>
-            <input
-              type="text"
-              className="form-control"
-              value={formData.sku}
-              onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
-              required
-            />
-          </div>
+          
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             <div className="form-group">
               <label>Category *</label>
@@ -330,36 +337,7 @@ export default function Products() {
                 ))}
               </select>
             </div>
-            <div className="form-group">
-              <label>Color *</label>
-              <select
-                className="form-control"
-                value={formData.colorId}
-                onChange={(e) => setFormData({ ...formData, colorId: e.target.value })}
-                required
-              >
-                <option value="">Select Color</option>
-                {colors?.map(color => (
-                  <option key={color._id} value={color._id}>{color.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            <div className="form-group">
-              <label>Size *</label>
-              <select
-                className="form-control"
-                value={formData.sizeId}
-                onChange={(e) => setFormData({ ...formData, sizeId: e.target.value })}
-                required
-              >
-                <option value="">Select Size</option>
-                {sizes?.map(size => (
-                  <option key={size._id} value={size._id}>{size.label}</option>
-                ))}
-              </select>
-            </div>
+            
             <div className="form-group">
               <label>Rayon *</label>
               <select
@@ -375,18 +353,8 @@ export default function Products() {
               </select>
             </div>
           </div>
+          
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-            <div className="form-group">
-              <label>Quantity *</label>
-              <input
-                type="number"
-                className="form-control"
-                value={formData.quantity}
-                onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
-                min="0"
-                required
-              />
-            </div>
             <div className="form-group">
               <label>Price</label>
               <input
@@ -398,17 +366,18 @@ export default function Products() {
                 min="0"
               />
             </div>
+             <div className="form-group">
+                <label>Low Stock Threshold</label>
+                <input
+                type="number"
+                className="form-control"
+                value={formData.lowStockThreshold}
+                onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) })}
+                min="0"
+                />
+            </div>
           </div>
-          <div className="form-group">
-            <label>Low Stock Threshold</label>
-            <input
-              type="number"
-              className="form-control"
-              value={formData.lowStockThreshold}
-              onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) })}
-              min="0"
-            />
-          </div>
+
           <div className="form-group">
             <label>Description</label>
             <textarea
@@ -417,9 +386,58 @@ export default function Products() {
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
           </div>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            {editingProduct ? 'Update' : 'Create'} Product
-          </button>
+
+          <hr style={{margin: '20px 0'}}/>
+          
+          <h4>Variants (Color & Size)</h4>
+          <div style={{background: '#f9f9f9', padding: '10px', borderRadius: '5px', marginBottom: '10px'}}>
+             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '10px', alignItems: 'end' }}>
+                <div className="form-group" style={{marginBottom:0}}>
+                    <label>Color</label>
+                    <select className="form-control" value={newVariant.colorId} onChange={e => setNewVariant({...newVariant, colorId: e.target.value})}>
+                        <option value="">Select Color</option>
+                        {colors?.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+                    </select>
+                </div>
+                <div className="form-group" style={{marginBottom:0}}>
+                    <label>Size</label>
+                    <select className="form-control" value={newVariant.sizeId} onChange={e => setNewVariant({...newVariant, sizeId: e.target.value})}>
+                        <option value="">Select Size</option>
+                        {sizes?.map(s => <option key={s._id} value={s._id}>{s.label}</option>)}
+                    </select>
+                </div>
+                <div className="form-group" style={{marginBottom:0}}>
+                    <label>Quantity</label>
+                     <input type="number" className="form-control" value={newVariant.quantity} onChange={e => setNewVariant({...newVariant, quantity: parseInt(e.target.value)})} min="0" />
+                </div>
+                <button type="button" className="btn btn-secondary" onClick={addVariant}>Add Variant</button>
+             </div>
+          </div>
+
+          <div style={{maxHeight: '200px', overflowY: 'auto'}}>
+            <table style={{width: '100%', fontSize: '0.9em'}}>
+                <thead>
+                    <tr style={{textAlign:'left'}}><th>Color</th><th>Size</th><th>Qty</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    {formData.variants.map((varItem, idx) => (
+                        <tr key={idx}>
+                            <td>{colors?.find(c => c._id === varItem.colorId)?.name || '...'}</td>
+                            <td>{sizes?.find(s => s._id === varItem.sizeId)?.label || '...'}</td>
+                            <td>{varItem.quantity}</td>
+                            <td><button type="button" onClick={() => removeVariant(idx)} style={{color:'red'}}>Remove</button></td>
+                        </tr>
+                    ))}
+                    {formData.variants.length === 0 && <tr><td colSpan="4" style={{textAlign:'center'}}>No variants added yet.</td></tr>}
+                </tbody>
+            </table>
+          </div>
+
+          <div style={{marginTop: '20px'}}>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                {editingProduct ? 'Update' : 'Create'} Product
+            </button>
+          </div>
         </form>
       </Modal>
     </div>

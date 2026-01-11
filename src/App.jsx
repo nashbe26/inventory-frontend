@@ -17,6 +17,8 @@ import BulkGeneration from './pages/BulkGeneration'
 import Orders from './pages/Orders'
 import Analytics from './pages/Analytics'
 import Expenses from './pages/Expenses'
+import OrganizationSetup from './pages/OrganizationSetup'
+import OrganizationManagement from './pages/OrganizationManagement'
 
 function App() {
   return (
@@ -25,6 +27,7 @@ function App() {
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/setup-organization" element={<OrganizationSetup />} />
 
         {/* Protected Routes with Layout */}
         <Route
@@ -55,6 +58,7 @@ function App() {
           <Route path="orders" element={<Orders />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="expenses" element={<Expenses />} />
+          <Route path="organization" element={<OrganizationManagement />} />
         </Route>
 
         {/* Catch all - redirect to home */}

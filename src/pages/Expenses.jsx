@@ -1,105 +1,106 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  FiPlus, 
-  FiSearch, 
-  FiEdit2, 
-  FiTrash2, 
-  FiFilter, 
-  FiDollarSign, 
-  FiX,
-  FiCalendar,
-  FiTrendingUp,
-  FiTrendingDown
-} from 'react-icons/fi';
+import { FaPlus, FaEdit, FaTrash, FaSearch, FaWallet } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import Modal from '../components/Modal';
 import api from '../services/api';
 
 const CATEGORIES = [
-  { value: 'rent', label: 'Rent', color: 'bg-blue-100 text-blue-800' },
-  { value: 'utilities', label: 'Utilities', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'salaries', label: 'Salaries', color: 'bg-green-100 text-green-800' },
-  { value: 'supplies', label: 'Supplies', color: 'bg-purple-100 text-purple-800' },
-  { value: 'marketing', label: 'Marketing', color: 'bg-pink-100 text-pink-800' },
-  { value: 'maintenance', label: 'Maintenance', color: 'bg-orange-100 text-orange-800' },
-  { value: 'shipping', label: 'Shipping', color: 'bg-indigo-100 text-indigo-800' },
-  { value: 'taxes', label: 'Taxes', color: 'bg-red-100 text-red-800' },
-  { value: 'insurance', label: 'Insurance', color: 'bg-teal-100 text-teal-800' },
-  { value: 'other', label: 'Other', color: 'bg-gray-100 text-gray-800' }
+  'inventory_purchase', 'shipping_delivery', 'packaging_supplies', 'marketing_ads',
+  'website_hosting', 'payment_processing', 'rent_warehouse', 'utilities',
+  'salaries_wages', 'software_subscriptions', 'office_supplies', 'returns_refunds',
+  'taxes_fees', 'insurance', 'maintenance_repairs', 'professional_services', 'other'
 ];
 
-const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'card', label: 'Card' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'check', label: 'Check' },
-  { value: 'other', label: 'Other' }
-];
+const categoryColors = {
+  inventory_purchase: 'badge-primary',
+  shipping_delivery: 'badge-info',
+  packaging_supplies: 'badge-secondary',
+  marketing_ads: 'badge-warning',
+  website_hosting: 'badge-info',
+  payment_processing: 'badge-success',
+  rent_warehouse: 'badge-info',
+  utilities: 'badge-warning',
+  salaries_wages: 'badge-primary',
+  software_subscriptions: 'badge-info',
+  office_supplies: 'badge-secondary',
+  returns_refunds: 'badge-danger',
+  taxes_fees: 'badge-danger',
+  insurance: 'badge-secondary',
+  maintenance_repairs: 'badge-warning',
+  professional_services: 'badge-success',
+  other: 'badge-light'
+};
 
-const Expenses = () => {
+const formatCategory = (category) => {
+  if (!category) return '';
+  return category
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+export default function Expenses() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
   const [formData, setFormData] = useState({
-    title: '',
-    amount: '',
-    category: 'other',
-    description: '',
-    date: new Date().toISOString().split('T')[0],
-    paymentMethod: 'cash',
-    isRecurring: false,
-    recurringPeriod: ''
+    title: '', amount: '', category: '', description: '',
+    date: '', reference: '', isRecurring: false
   });
 
-  // Fetch expenses
+  const buildQueryParams = () => {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (categoryFilter) params.append('category', categoryFilter);
+    if (dateRange.start) params.append('startDate', dateRange.start);
+    if (dateRange.end) params.append('endDate', dateRange.end);
+    return params.toString();
+  };
+
   const { data: expensesData, isLoading } = useQuery({
-    queryKey: ['expenses', categoryFilter],
+    queryKey: ['expenses', search, categoryFilter, dateRange],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (categoryFilter) params.append('category', categoryFilter);
-      const res = await api.get(`/expenses?${params}`);
+      const params = buildQueryParams();
+      const res = await api.get(`/expenses${params ? `?${params}` : ''}`);
       return res.data;
     }
   });
 
-  // Fetch expense stats
   const { data: statsData } = useQuery({
     queryKey: ['expense-stats'],
     queryFn: async () => {
-      const res = await api.get('/expenses/stats');
+      const res = await api.get('/expenses/stats/overview');
       return res.data;
     }
   });
 
-  // Create expense mutation
+  const expenses = expensesData?.data || [];
+  const stats = statsData?.data;
+
   const createMutation = useMutation({
-    mutationFn: async (data) => {
-      const res = await api.post('/expenses', data);
-      return res.data;
-    },
+    mutationFn: (data) => api.post('/expenses', data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['expenses']);
-      queryClient.invalidateQueries(['expense-stats']);
-      toast.success('Expense added successfully');
+      toast.success('Expense created successfully!');
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expense-stats'] });
       closeModal();
     },
     onError: (error) => {
-      toast.error(error.response?.data?.message || 'Failed to add expense');
+      toast.error(error.response?.data?.message || 'Failed to create expense');
     }
   });
 
-  // Update expense mutation
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }) => {
-      const res = await api.put(`/expenses/${id}`, data);
-      return res.data;
-    },
+    mutationFn: ({ id, data }) => api.put(`/expenses/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['expenses']);
-      queryClient.invalidateQueries(['expense-stats']);
-      toast.success('Expense updated successfully');
+      toast.success('Expense updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expense-stats'] });
       closeModal();
     },
     onError: (error) => {
@@ -107,406 +108,308 @@ const Expenses = () => {
     }
   });
 
-  // Delete expense mutation
   const deleteMutation = useMutation({
-    mutationFn: async (id) => {
-      const res = await api.delete(`/expenses/${id}`);
-      return res.data;
-    },
+    mutationFn: (id) => api.delete(`/expenses/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries(['expenses']);
-      queryClient.invalidateQueries(['expense-stats']);
-      toast.success('Expense deleted successfully');
+      toast.success('Expense deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expense-stats'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.message || 'Failed to delete expense');
     }
   });
 
+  const openModal = (expense = null) => {
+    if (expense) {
+      setEditingExpense(expense);
+      setFormData({
+        title: expense.title || '',
+        amount: expense.amount || '',
+        category: expense.category || '',
+        description: expense.description || '',
+        date: expense.date ? expense.date.split('T')[0] : '',
+        reference: expense.reference || '',
+        isRecurring: expense.isRecurring || false
+      });
+    } else {
+      setEditingExpense(null);
+      setFormData({
+        title: '', amount: '', category: '', description: '',
+        date: new Date().toISOString().split('T')[0],
+        reference: '', isRecurring: false
+      });
+    }
+    setShowModal(true);
+  };
+
   const closeModal = () => {
     setShowModal(false);
     setEditingExpense(null);
-    setFormData({
-      title: '',
-      amount: '',
-      category: 'other',
-      description: '',
-      date: new Date().toISOString().split('T')[0],
-      paymentMethod: 'cash',
-      isRecurring: false,
-      recurringPeriod: ''
-    });
-  };
-
-  const openEditModal = (expense) => {
-    setEditingExpense(expense);
-    setFormData({
-      title: expense.title,
-      amount: expense.amount,
-      category: expense.category,
-      description: expense.description || '',
-      date: expense.date.split('T')[0],
-      paymentMethod: expense.paymentMethod,
-      isRecurring: expense.isRecurring,
-      recurringPeriod: expense.recurringPeriod || ''
-    });
-    setShowModal(true);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const data = {
-      ...formData,
-      amount: parseFloat(formData.amount)
-    };
-
+    const payload = { ...formData, amount: parseFloat(formData.amount) };
     if (editingExpense) {
-      updateMutation.mutate({ id: editingExpense._id, data });
+      updateMutation.mutate({ id: editingExpense._id, data: payload });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(payload);
     }
   };
 
-  const getCategoryInfo = (category) => {
-    return CATEGORIES.find(c => c.value === category) || CATEGORIES[CATEGORIES.length - 1];
+  const handleDelete = (id) => {
+    if (confirm('Are you sure you want to delete this expense?')) {
+      deleteMutation.mutate(id);
+    }
   };
 
-  const filteredExpenses = expensesData?.data?.filter(expense =>
-    expense.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    expense.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
-
-  const stats = statsData?.data;
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
-          <p className="text-gray-600">Track and manage your business expenses</p>
-        </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <FiPlus className="w-5 h-5" />
-          Add Expense
+    <div>
+      <div className="page-header">
+        <h1 className="page-title"><FaWallet style={{ marginRight: '10px' }} /> Expenses</h1>
+        <button className="btn btn-primary" onClick={() => openModal()}>
+          <FaPlus style={{ marginRight: '8px' }} /> Add Expense
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <FiDollarSign className="w-6 h-6 text-blue-600" />
+      {/* Stats */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <h3>All Time</h3>
+          <div className="stat-value">{(stats?.allTime?.total || 0).toFixed(2)} dt</div>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>{stats?.allTime?.count || 0} expenses</p>
+        </div>
+        <div className="stat-card">
+          <h3>This Month</h3>
+          <div className="stat-value">{(stats?.thisMonth?.total || 0).toFixed(2)} dt</div>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>{stats?.thisMonth?.count || 0} expenses</p>
+        </div>
+        <div className="stat-card">
+          <h3>Last Month</h3>
+          <div className="stat-value">{(stats?.lastMonth?.total || 0).toFixed(2)} dt</div>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>{stats?.lastMonth?.count || 0} expenses</p>
+        </div>
+        <div className="stat-card">
+          <h3>Top Category</h3>
+          <div className="stat-value" style={{ textTransform: 'capitalize', fontSize: '1.125rem' }}>
+            {formatCategory(stats?.byCategory?.[0]?.category) || 'N/A'}
+          </div>
+          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>
+            {(stats?.byCategory?.[0]?.total || 0).toFixed(2)} dt
+          </p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="card" style={{ marginBottom: '25px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', alignItems: 'end' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Search</label>
+            <div style={{ position: 'relative' }}>
+              <FaSearch style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+              <input
+                type="text"
+                className="form-control"
+                style={{ paddingLeft: '38px' }}
+                placeholder="Search expenses..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
           </div>
-          <p className="mt-4 text-sm text-gray-600">Today</p>
-          <p className="text-2xl font-bold text-gray-900">${(stats?.today?.total || 0).toFixed(2)}</p>
-          <p className="text-sm text-gray-500 mt-1">{stats?.today?.count || 0} expenses</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <FiCalendar className="w-6 h-6 text-yellow-600" />
-            </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Category</label>
+            <select className="form-control" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+              <option value="">All Categories</option>
+              {CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{formatCategory(cat)}</option>
+              ))}
+            </select>
           </div>
-          <p className="mt-4 text-sm text-gray-600">This Week</p>
-          <p className="text-2xl font-bold text-gray-900">${(stats?.thisWeek?.total || 0).toFixed(2)}</p>
-          <p className="text-sm text-gray-500 mt-1">{stats?.thisWeek?.count || 0} expenses</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="p-3 bg-red-100 rounded-lg">
-              <FiTrendingUp className="w-6 h-6 text-red-600" />
-            </div>
-            {stats?.thisMonth?.change !== 0 && (
-              <span className={`flex items-center gap-1 text-sm ${stats?.thisMonth?.change >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                {stats?.thisMonth?.change >= 0 ? <FiTrendingUp className="w-4 h-4" /> : <FiTrendingDown className="w-4 h-4" />}
-                {Math.abs(stats?.thisMonth?.change || 0).toFixed(1)}%
-              </span>
-            )}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>From Date</label>
+            <input
+              type="date"
+              className="form-control"
+              value={dateRange.start}
+              onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+            />
           </div>
-          <p className="mt-4 text-sm text-gray-600">This Month</p>
-          <p className="text-2xl font-bold text-gray-900">${(stats?.thisMonth?.total || 0).toFixed(2)}</p>
-          <p className="text-sm text-gray-500 mt-1">vs ${(stats?.thisMonth?.previousMonth || 0).toFixed(2)} last month</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 border border-gray-200">
-          <div className="p-3 bg-green-100 rounded-lg w-fit">
-            <FiDollarSign className="w-6 h-6 text-green-600" />
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>To Date</label>
+            <input
+              type="date"
+              className="form-control"
+              value={dateRange.end}
+              onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+            />
           </div>
-          <p className="mt-4 text-sm text-gray-600">Total Listed</p>
-          <p className="text-2xl font-bold text-gray-900">${(expensesData?.totalAmount || 0).toFixed(2)}</p>
-          <p className="text-sm text-gray-500 mt-1">{expensesData?.pagination?.total || 0} total</p>
+        </div>
+      </div>
+
+      {/* Expenses Table */}
+      <div className="card">
+        <div className="table-container">
+          {isLoading ? (
+            <div className="loading">Loading expenses...</div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Title</th>
+                  <th>Category</th>
+                  <th>Amount</th>
+                  <th>Reference</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.length === 0 ? (
+                  <tr><td colSpan="6" style={{ textAlign: 'center' }}>No expenses found</td></tr>
+                ) : (
+                  expenses.map((expense) => (
+                    <tr key={expense._id}>
+                      <td>{new Date(expense.date).toLocaleDateString()}</td>
+                      <td>
+                        <strong>{expense.title}</strong>
+                        {expense.isRecurring && <span className="badge badge-info" style={{ marginLeft: '8px' }}>Recurring</span>}
+                        {expense.description && <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>{expense.description}</p>}
+                      </td>
+                      <td>
+                        <span className={`badge ${categoryColors[expense.category] || 'badge-secondary'}`}>
+                          {formatCategory(expense.category)}
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: '700' }}>{expense.amount.toFixed(2)} dt</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{expense.reference || '-'}</td>
+                      <td>
+                        <button className="btn btn-sm btn-secondary" onClick={() => openModal(expense)} style={{ marginRight: '5px' }}>
+                          <FaEdit />
+                        </button>
+                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(expense._id)}>
+                          <FaTrash />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
       {/* Category Breakdown */}
       {stats?.byCategory?.length > 0 && (
-        <div className="bg-white rounded-xl p-5 border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">This Month by Category</h2>
-          <div className="flex flex-wrap gap-3">
-            {stats.byCategory.map((cat) => {
-              const info = getCategoryInfo(cat._id);
-              return (
-                <div key={cat._id} className={`px-4 py-2 rounded-lg ${info.color}`}>
-                  <span className="font-medium">{info.label}</span>
-                  <span className="ml-2 font-bold">${cat.total.toFixed(2)}</span>
+        <div className="card" style={{ marginTop: '25px' }}>
+          <h3>Expenses by Category (This Month)</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px', marginTop: '15px' }}>
+            {stats.byCategory.map((cat) => (
+              <div key={cat.category} style={{ padding: '15px', background: 'var(--bg-secondary)', borderRadius: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className={`badge ${categoryColors[cat.category] || 'badge-secondary'}`}>{formatCategory(cat.category)}</span>
+                  <span style={{ fontWeight: '700' }}>{cat.total.toFixed(2)} dt</span>
                 </div>
-              );
-            })}
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: 0 }}>
+                  {cat.count} expense{cat.count !== 1 ? 's' : ''}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search expenses..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <FiFilter className="text-gray-400" />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Categories</option>
-            {CATEGORIES.map(cat => (
-              <option key={cat.value} value={cat.value}>{cat.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Expenses Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center text-gray-500">Loading expenses...</div>
-        ) : filteredExpenses.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">No expenses found</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredExpenses.map((expense) => {
-                  const catInfo = getCategoryInfo(expense.category);
-                  return (
-                    <tr key={expense._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-900">{expense.title}</p>
-                          {expense.description && (
-                            <p className="text-sm text-gray-500 truncate max-w-xs">{expense.description}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${catInfo.color}`}>
-                          {catInfo.label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-medium text-gray-900">
-                        ${expense.amount.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600">
-                        {new Date(expense.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 capitalize">
-                        {expense.paymentMethod.replace('_', ' ')}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => openEditModal(expense)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                          >
-                            <FiEdit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this expense?')) {
-                                deleteMutation.mutate(expense._id);
-                              }
-                            }}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                          >
-                            <FiTrash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* Modal */}
+      <Modal isOpen={showModal} onClose={closeModal} title={editingExpense ? 'Edit Expense' : 'Add Expense'}>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Title *</label>
+            <input
+              type="text"
+              className="form-control"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              required
+            />
           </div>
-        )}
-      </div>
-
-      {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={closeModal} />
-            <div className="relative bg-white rounded-xl w-full max-w-lg p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {editingExpense ? 'Edit Expense' : 'Add New Expense'}
-                </h2>
-                <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-lg">
-                  <FiX className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Expense title"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      step="0.01"
-                      value={formData.amount}
-                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                    <select
-                      required
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {CATEGORIES.map(cat => (
-                        <option key={cat.value} value={cat.value}>{cat.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                    <select
-                      value={formData.paymentMethod}
-                      onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      {PAYMENT_METHODS.map(method => (
-                        <option key={method.value} value={method.value}>{method.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows="2"
-                    placeholder="Optional description"
-                  />
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.isRecurring}
-                      onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">Recurring expense</span>
-                  </label>
-                  {formData.isRecurring && (
-                    <select
-                      value={formData.recurringPeriod}
-                      onChange={(e) => setFormData({ ...formData, recurringPeriod: e.target.value })}
-                      className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select period</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="quarterly">Quarterly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-4 pt-4">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={createMutation.isPending || updateMutation.isPending}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {createMutation.isPending || updateMutation.isPending ? 'Saving...' : editingExpense ? 'Update' : 'Add Expense'}
-                  </button>
-                </div>
-              </form>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div className="form-group">
+              <label>Amount *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="form-control"
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Category *</label>
+              <select
+                className="form-control"
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                required
+              >
+                <option value="">Select Category</option>
+                {CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{formatCategory(cat)}</option>
+                ))}
+              </select>
             </div>
           </div>
-        </div>
-      )}
+          <div className="form-group">
+            <label>Date *</label>
+            <input
+              type="date"
+              className="form-control"
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Reference / Receipt #</label>
+            <input
+              type="text"
+              className="form-control"
+              value={formData.reference}
+              onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
+              placeholder="Invoice or receipt number"
+            />
+          </div>
+          <div className="form-group">
+            <label>Description</label>
+            <textarea
+              className="form-control"
+              rows="3"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Additional details..."
+            />
+          </div>
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={formData.isRecurring}
+                onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
+              />
+              Recurring Expense
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={createMutation.isPending || updateMutation.isPending}>
+              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : editingExpense ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
-};
-
-export default Expenses;
+}

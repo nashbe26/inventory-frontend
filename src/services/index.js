@@ -39,7 +39,10 @@ export const productService = {
   update: (id, data) => api.put(`/products/${id}`, data),
   delete: (id) => api.delete(`/products/${id}`),
   getBarcode: (id) => `/api-inventory/products/${id}/barcode`,
-  getDochette: (id) => `/api-inventory/products/${id}/dochette`
+  getDochette: (id) => `/api-inventory/products/${id}/dochette`,
+  // Add methods to fetch the blobs directly (with Auth header)
+  fetchBarcode: (id) => api.get(`/products/${id}/barcode`, { responseType: 'blob' }),
+  fetchDochette: (id) => api.get(`/products/${id}/dochette`, { responseType: 'blob' })
 };
 
 export const inventoryService = {

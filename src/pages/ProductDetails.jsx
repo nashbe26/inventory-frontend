@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { productService, inventoryService } from '../services';
@@ -22,6 +22,7 @@ export default function ProductDetails() {
   const [adjustmentType, setAdjustmentType] = useState('increase');
   const [adjustmentQuantity, setAdjustmentQuantity] = useState(0);
   const [adjustmentReason, setAdjustmentReason] = useState('');
+  const [selectedVariantId, setSelectedVariantId] = useState(null);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -31,6 +32,7 @@ export default function ProductDetails() {
     }
   });
 
+  
   const adjustMutation = useMutation({
     mutationFn: inventoryService.adjust,
     onSuccess: () => {
@@ -41,6 +43,7 @@ export default function ProductDetails() {
       setIsAdjustModalOpen(false);
       setAdjustmentQuantity(0);
       setAdjustmentReason('');
+      setSelectedVariantId(null);
     },
     onError: (error) => {
       toast.error(error.response?.data?.message || 'Failed to adjust inventory');
@@ -49,38 +52,41 @@ export default function ProductDetails() {
 
   const handleAdjustment = (e) => {
     e.preventDefault();
+    if (!selectedVariantId) {
+        toast.error('Please select a variant to adjust');
+        return;
+    }
     adjustMutation.mutate({
       productId: id,
+      variantId: selectedVariantId,
       quantity: parseInt(adjustmentQuantity),
       type: adjustmentType,
       reason: adjustmentReason
     });
   };
 
-  const downloadBarcode = () => {
-    const url = productService.getBarcode(id);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `barcode-${product.sku}.png`;
-    link.click();
-    toast.success('Barcode downloaded');
+  const downloadDochette = async () => {
+    try {
+      const response = await productService.fetchDochette(id);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `dochette-${product.name.replace(/\s+/g, '-')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Dochette downloaded');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download dochette');
+    }
   };
 
-  const downloadDochette = () => {
-    const url = productService.getDochette(id);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `dochette-${product.sku}.pdf`;
-    link.click();
-    toast.success('Dochette downloaded');
-  };
-
-  const getStockStatus = () => {
-    if (!product) return null;
-    
-    if (product.quantity === 0) {
+  const getStockStatus = (qty, threshold) => {
+    if (qty === 0) {
       return { text: 'Out of Stock', className: 'badge-danger' };
-    } else if (product.quantity <= product.lowStockThreshold) {
+    } else if (qty <= threshold) {
       return { text: 'Low Stock', className: 'badge-warning' };
     } else {
       return { text: 'In Stock', className: 'badge-success' };
@@ -90,7 +96,7 @@ export default function ProductDetails() {
   if (isLoading) return <div className="loading">Loading product details...</div>;
   if (!product) return <div>Product not found</div>;
 
-  const stockStatus = getStockStatus();
+  const totalStockStatus = getStockStatus(product.totalQuantity, product.lowStockThreshold);
 
   return (
     <div>
@@ -99,11 +105,8 @@ export default function ProductDetails() {
           <FaArrowLeft /> Back to Products
         </button>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn btn-primary" onClick={downloadBarcode}>
-            <FaBarcode /> Download Barcode
-          </button>
           <button className="btn btn-primary" onClick={downloadDochette}>
-            <FaDownload /> Download Dochette
+            <FaDownload /> Download Labels
           </button>
         </div>
       </div>
@@ -118,44 +121,12 @@ export default function ProductDetails() {
               <p style={{ marginTop: '5px', fontSize: '1.2rem' }}>{product.name}</p>
             </div>
             <div>
-              <strong>SKU:</strong>
-              <p style={{ marginTop: '5px' }}><code>{product.sku}</code></p>
-            </div>
-            <div>
-              <strong>Barcode:</strong>
-              <p style={{ marginTop: '5px' }}><code>{product.barcode || 'Not generated'}</code></p>
-            </div>
-            <div>
               <strong>Description:</strong>
               <p style={{ marginTop: '5px' }}>{product.description || 'No description'}</p>
             </div>
-          </div>
-        </div>
-
-        {/* Attributes */}
-        <div className="card">
-          <h2 style={{ marginBottom: '20px' }}>Attributes</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <div>
               <strong>Category:</strong>
               <p style={{ marginTop: '5px' }}>{product.categoryId?.name} ({product.categoryId?.code})</p>
-            </div>
-            <div>
-              <strong>Color:</strong>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
-                <div style={{
-                  width: '30px',
-                  height: '30px',
-                  backgroundColor: product.colorId?.hexCode,
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-color)'
-                }} />
-                {product.colorId?.name}
-              </div>
-            </div>
-            <div>
-              <strong>Size:</strong>
-              <p style={{ marginTop: '5px' }}>{product.sizeId?.label} ({product.sizeId?.value})</p>
             </div>
             <div>
               <strong>Rayon:</strong>
@@ -169,21 +140,27 @@ export default function ProductDetails() {
           </div>
         </div>
 
-        {/* Inventory */}
+        {/* Inventory Summary */}
         <div className="card">
-          <h2 style={{ marginBottom: '20px' }}>Inventory</h2>
+          <h2 style={{ marginBottom: '20px' }}>Inventory Summary</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+             <div>
+              <strong>Total Price:</strong>
+              <p style={{ marginTop: '5px', fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
+                {product.price.toFixed(2)} TND
+              </p>
+            </div>
             <div>
-              <strong>Current Quantity:</strong>
+              <strong>Total Quantity:</strong>
               <p style={{ marginTop: '5px', fontSize: '2rem', fontWeight: 'bold' }}>
-                {product.quantity}
+                {product.totalQuantity}
               </p>
             </div>
             <div>
               <strong>Stock Status:</strong>
               <p style={{ marginTop: '5px' }}>
-                <span className={`badge ${stockStatus.className}`}>
-                  {stockStatus.text}
+                <span className={`badge ${totalStockStatus.className}`}>
+                  {totalStockStatus.text}
                 </span>
               </p>
             </div>
@@ -191,49 +168,62 @@ export default function ProductDetails() {
               <strong>Low Stock Threshold:</strong>
               <p style={{ marginTop: '5px' }}>{product.lowStockThreshold}</p>
             </div>
-            {product.price && (
-              <div>
-                <strong>Price:</strong>
-                <p style={{ marginTop: '5px', fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
-                  ${product.price.toFixed(2)}
-                </p>
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <button 
-                className="btn btn-success" 
-                onClick={() => {
-                  setAdjustmentType('increase');
-                  setIsAdjustModalOpen(true);
-                }}
-                style={{ flex: 1 }}
-              >
-                <FaPlus /> Increase
-              </button>
-              <button 
-                className="btn btn-danger" 
-                onClick={() => {
-                  setAdjustmentType('decrease');
-                  setIsAdjustModalOpen(true);
-                }}
-                style={{ flex: 1 }}
-              >
-                <FaMinus /> Decrease
-              </button>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Barcode Display */}
+      {/* Variants Table */}
       <div className="card" style={{ marginTop: '20px' }}>
-        <h2 style={{ marginBottom: '20px' }}>Barcode Preview</h2>
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          <img 
-            src={productService.getBarcode(id)} 
-            alt="Product Barcode" 
-            style={{ maxWidth: '400px', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '20px' }}
-          />
+        <h2 style={{ marginBottom: '20px' }}>Variants</h2>
+        <div className="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Color</th>
+                        <th>Size</th>
+                        <th>SKU</th>
+                        <th>Barcode</th>
+                        <th>Stock</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {product.variants?.map(variant => (
+                        <tr key={variant._id}>
+                             <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    backgroundColor: variant.colorId?.hexCode,
+                                    borderRadius: '50%',
+                                    border: '1px solid var(--border-color)'
+                                    }} />
+                                    {variant.colorId?.name}
+                                </div>
+                             </td>
+                             <td>{variant.sizeId?.label}</td>
+                             <td><code>{variant.sku}</code></td>
+                             <td><code>{variant.barcode || '-'}</code></td>
+                             <td>
+                                <strong>{variant.quantity}</strong>
+                             </td>
+                             <td>
+                                <button className="btn btn-sm btn-success" style={{ marginRight: '5px' }} onClick={() => {
+                                    setAdjustmentType('increase');
+                                    setSelectedVariantId(variant._id);
+                                    setIsAdjustModalOpen(true);
+                                }}>+</button>
+                                <button className="btn btn-sm btn-danger" onClick={() => {
+                                    setAdjustmentType('decrease');
+                                    setSelectedVariantId(variant._id);
+                                    setIsAdjustModalOpen(true);
+                                }}>-</button>
+                             </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
       </div>
 
@@ -244,6 +234,14 @@ export default function ProductDetails() {
         title={`${adjustmentType === 'increase' ? 'Increase' : 'Decrease'} Inventory`}
       >
         <form onSubmit={handleAdjustment}>
+           <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                <strong>Selected Variant:</strong><br/>
+                {(() => {
+                    const v = product.variants?.find(v => v._id === selectedVariantId);
+                    return v ? `${v.colorId?.name} - ${v.sizeId?.label}` : 'None';
+                })()}
+           </div>
+
           <div className="form-group">
             <label>Quantity *</label>
             <input
@@ -256,34 +254,22 @@ export default function ProductDetails() {
             />
           </div>
           <div className="form-group">
-            <label>Reason</label>
+            <label>Reason (Optional)</label>
             <textarea
               className="form-control"
+              rows="3"
               value={adjustmentReason}
               onChange={(e) => setAdjustmentReason(e.target.value)}
-              placeholder="e.g., Received shipment, Damaged goods, Sale, etc."
+              placeholder="e.g., Stock received, Damaged, Correction..."
             />
           </div>
-          <div style={{ 
-            padding: '15px', 
-            backgroundColor: 'var(--bg-secondary)', 
-            borderRadius: '8px', 
-            marginBottom: '20px' 
-          }}>
-            <p style={{ margin: 0 }}>
-              Current Quantity: <strong>{product.quantity}</strong>
-            </p>
-            <p style={{ margin: '10px 0 0 0' }}>
-              New Quantity: <strong>
-                {adjustmentType === 'increase' 
-                  ? product.quantity + parseInt(adjustmentQuantity || 0)
-                  : product.quantity - parseInt(adjustmentQuantity || 0)
-                }
-              </strong>
-            </p>
-          </div>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            Confirm {adjustmentType === 'increase' ? 'Increase' : 'Decrease'}
+          <button 
+            type="submit" 
+            className={`btn btn-${adjustmentType === 'increase' ? 'success' : 'danger'}`}
+            style={{ width: '100%' }}
+            disabled={adjustMutation.isPending}
+          >
+            {adjustMutation.isPending ? 'Saving...' : `Confirm ${adjustmentType === 'increase' ? 'Increase' : 'Decrease'}`}
           </button>
         </form>
       </Modal>

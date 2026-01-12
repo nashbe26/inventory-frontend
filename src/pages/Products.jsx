@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { productService, categoryService, colorService, sizeService, rayonService } from '../services';
+import { productService, categoryService, colorService, sizeService, rayonService, fournisseurService } from '../services';
 import { toast } from 'react-toastify';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaEye } from 'react-icons/fa';
 import Modal from '../components/Modal';
@@ -19,8 +19,8 @@ export default function Products() {
   });
   const [page, setPage] = useState(1);
   const [formData, setFormData] = useState({
-    name: '', categoryId: '', rayonId: '',
-    price: '', description: '', lowStockThreshold: 10,
+    name: '', categoryId: '', rayonId: '', fournisseurId: '',
+    price: '', buyingPrice: '', description: '', lowStockThreshold: 10,
     variants: []
   });
 
@@ -48,6 +48,11 @@ export default function Products() {
     queryKey: ['categories'],
     queryFn: async () => (await categoryService.getAll()).data.data
   });
+
+  const { data: fournisseurs } = useQuery({
+      queryKey: ['fournisseurs'],
+      queryFn: async () => (await fournisseurService.getAll()).data.data
+    });
 
   const { data: colors } = useQuery({
     queryKey: ['colors'],
@@ -107,8 +112,10 @@ export default function Products() {
         categoryId: product.categoryId?._id || '',
         rayonId: product.rayonId?._id || '',
         price: product.price || '',
+        buyingPrice: product.buyingPrice || '',
         description: product.description || '',
         lowStockThreshold: product.lowStockThreshold || 10,
+        fournisseurId: product.fournisseurId?._id || '',
         variants: product.variants.map(v => ({
              colorId: v.colorId?._id || v.colorId,
              sizeId: v.sizeId?._id || v.sizeId,
@@ -121,8 +128,8 @@ export default function Products() {
     } else {
       setEditingProduct(null);
       setFormData({
-        name: '', categoryId: '', rayonId: '',
-        price: '', description: '', lowStockThreshold: 10,
+        name: '', categoryId: '', rayonId: '', fournisseurId: '',
+        price: '', buyingPrice: '', description: '', lowStockThreshold: 10,
         variants: []
       });
     }
@@ -322,7 +329,7 @@ export default function Products() {
             />
           </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
             <div className="form-group">
               <label>Category *</label>
               <select
@@ -352,16 +359,41 @@ export default function Products() {
                 ))}
               </select>
             </div>
+            
+            <div className="form-group">
+              <label>Supplier</label>
+              <select
+                className="form-control"
+                value={formData.fournisseurId}
+                onChange={(e) => setFormData({ ...formData, fournisseurId: e.target.value })}
+              >
+                <option value="">Select Supplier</option>
+                {fournisseurs?.map(f => (
+                  <option key={f._id} value={f._id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
             <div className="form-group">
-              <label>Price</label>
+              <label>Selling Price</label>
               <input
                 type="number"
                 className="form-control"
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                step="0.01"
+                min="0"
+              />
+            </div>
+            <div className="form-group">
+              <label>Buying Price</label>
+              <input
+                type="number"
+                className="form-control"
+                value={formData.buyingPrice}
+                onChange={(e) => setFormData({ ...formData, buyingPrice: e.target.value })}
                 step="0.01"
                 min="0"
               />

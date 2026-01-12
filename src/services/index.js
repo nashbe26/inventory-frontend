@@ -45,6 +45,14 @@ export const productService = {
   fetchDochette: (id) => api.get(`/products/${id}/dochette`, { responseType: 'blob' })
 };
 
+export const fournisseurService = {
+  getAll: () => api.get('/fournisseurs'),
+  getOne: (id) => api.get(`/fournisseurs/${id}`),
+  create: (data) => api.post('/fournisseurs', data),
+  update: (id, data) => api.put(`/fournisseurs/${id}`, data),
+  delete: (id) => api.delete(`/fournisseurs/${id}`)
+};
+
 export const inventoryService = {
   adjust: (data) => api.post('/inventory/adjust', data),
   getLowStock: () => api.get('/inventory/low-stock'),

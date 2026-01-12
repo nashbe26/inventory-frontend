@@ -47,6 +47,11 @@ const OrganizationSetup = () => {
       toast.success('Invitation acceptée avec succès!');
       navigate('/');
     } catch (error) {
+      if (error.response?.data?.requiresRegistration) {
+        // Redirect to the dedicated accept invitation page which handles registration
+        navigate(`/accept-invitation/${formData.invitationToken}`);
+        return;
+      }
       toast.error(error.response?.data?.message || 'Erreur lors de l\'acceptation de l\'invitation');
     } finally {
       setLoading(false);

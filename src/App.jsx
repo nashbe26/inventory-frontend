@@ -10,6 +10,7 @@ import Categories from './pages/Categories'
 import Colors from './pages/Colors'
 import Sizes from './pages/Sizes'
 import Rayons from './pages/Rayons'
+import Fournisseurs from './pages/Fournisseurs'
 import Products from './pages/Products'
 import ProductDetails from './pages/ProductDetails'
 import BarcodeScanner from './pages/BarcodeScanner'
@@ -19,6 +20,7 @@ import Analytics from './pages/Analytics'
 import Expenses from './pages/Expenses'
 import OrganizationSetup from './pages/OrganizationSetup'
 import OrganizationManagement from './pages/OrganizationManagement'
+import AcceptInvitation from './pages/AcceptInvitation'
 
 function App() {
   return (
@@ -28,6 +30,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/setup-organization" element={<OrganizationSetup />} />
+        <Route path="/accept-invitation/:token" element={<AcceptInvitation />} />
 
         {/* Protected Routes with Layout */}
         <Route
@@ -53,6 +56,7 @@ function App() {
           <Route path="colors" element={<Colors />} />
           <Route path="sizes" element={<Sizes />} />
           <Route path="rayons" element={<Rayons />} />
+          <Route path="fournisseurs" element={<Fournisseurs />} />
           <Route path="products" element={<Products />} />
           <Route path="products/:id" element={<ProductDetails />} />
           <Route path="orders" element={<Orders />} />

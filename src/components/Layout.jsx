@@ -14,7 +14,8 @@ import {
   FaShoppingCart,
   FaChartBar,
   FaUsers,
-  FaMoneyBillWave
+  FaMoneyBillWave,
+  FaTruck
 } from 'react-icons/fa'
 
 export default function Layout() {
@@ -98,6 +99,11 @@ export default function Layout() {
                 <FaWarehouse /> Rayons
               </NavLink>
             </li>
+            <li>
+              <NavLink to="/fournisseurs" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaTruck /> Suppliers
+              </NavLink>
+            </li> 
           </ul>
         </nav>
 

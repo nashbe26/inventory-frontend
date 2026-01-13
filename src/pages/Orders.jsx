@@ -311,21 +311,21 @@ export default function Orders() {
       {/* Create Order Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal} title="Create New Order">
         <form onSubmit={handleSubmit}>
-          <div className="form-group" style={{ position: 'relative' }}>
-            <label>Add Products</label>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Search products..."
-              value={productSearch}
-              onChange={(e) => setProductSearch(e.target.value)}
-            />
+          <div className="relative mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Add Products</label>
+            <div className="relative">
+              <input
+                type="text"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                placeholder="Search products by name or SKU..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+              />
+              <FaSearch className="absolute right-4 top-3.5 text-gray-400" />
+            </div>
+            
             {productSearch && filteredProducts.length > 0 && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, right: 0, background: 'white',
-                border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '300px',
-                overflowY: 'auto', zIndex: 10
-              }}>
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto">
                 {filteredProducts.slice(0, 10).map(product => {
                     const hasVariants = product.variants && product.variants.length > 0;
                     if (hasVariants) {
@@ -333,9 +333,23 @@ export default function Orders() {
                              <div
                                 key={`${product._id}-${v._id}`}
                                 onClick={() => addItemToOrder(product, v)}
-                                style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                                className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0 flex justify-between items-center group transition-colors"
                              >
-                                <strong>{product.name}</strong> - {v.colorId?.name}/{v.sizeId?.label} ({v.sku}) - Stock: {v.quantity} | ${product.price || 0}
+                                <div>
+                                  <div className="font-semibold text-gray-800">{product.name}</div>
+                                  <div className="text-sm text-gray-500">
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-2">
+                                      {v.colorId?.name} / {v.sizeId?.label}
+                                    </span>
+                                    <span className="text-gray-400">{v.sku}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-bold text-gray-900">{product.price || 0} dt</div>
+                                  <div className={`text-xs ${v.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    Stock: {v.quantity}
+                                  </div>
+                                </div>
                              </div>
                         ));
                     } else {
@@ -344,9 +358,20 @@ export default function Orders() {
                             <div
                                 key={product._id}
                                 onClick={() => addItemToOrder(product, null)}
-                                style={{ padding: '10px 15px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                                className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0 flex justify-between items-center group transition-colors"
                             >
-                                <strong>{product.name}</strong> ({product.sku}) - Stock: {product.quantity || product.totalQuantity} | ${product.price || 0}
+                                <div>
+                                  <div className="font-semibold text-gray-800">{product.name}</div>
+                                  <div className="text-sm text-gray-500">
+                                    <span className="text-gray-400">{product.sku}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-bold text-gray-900">{product.price || 0} dt</div>
+                                  <div className={`text-xs ${(product.quantity || product.totalQuantity) > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    Stock: {product.quantity || product.totalQuantity}
+                                  </div>
+                                </div>
                             </div>
                         );
                     }

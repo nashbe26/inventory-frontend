@@ -58,6 +58,11 @@ export default function Layout() {
               </NavLink>
             </li>
             <li>
+              <NavLink to="/pickups" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaTruck /> Pickups
+              </NavLink>
+            </li>
+            <li>
               <NavLink to="/analytics" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaChartBar /> Analytics
               </NavLink>
@@ -67,13 +72,7 @@ export default function Layout() {
                 <FaMoneyBillWave /> Expenses
               </NavLink>
             </li>
-            {isManager && (
-              <li>
-                <NavLink to="/bulk-generation" className={({ isActive }) => isActive ? 'active' : ''}>
-                  <FaFileDownload /> Bulk Generation
-                </NavLink>
-              </li>
-            )}
+     
             <li>
               <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaBoxes /> Products

@@ -21,6 +21,7 @@ import Expenses from './pages/Expenses'
 import OrganizationSetup from './pages/OrganizationSetup'
 import OrganizationManagement from './pages/OrganizationManagement'
 import AcceptInvitation from './pages/AcceptInvitation'
+import Pickups from './pages/Pickups'
 
 function App() {
   return (
@@ -44,14 +45,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="profile" element={<Profile />} />
           <Route path="scanner" element={<BarcodeScanner />} />
-          <Route
-            path="bulk-generation"
-            element={
-              <PrivateRoute requireManager>
-                <BulkGeneration />
-              </PrivateRoute>
-            }
-          />
+
           <Route path="categories" element={<Categories />} />
           <Route path="colors" element={<Colors />} />
           <Route path="sizes" element={<Sizes />} />
@@ -60,6 +54,7 @@ function App() {
           <Route path="products" element={<Products />} />
           <Route path="products/:id" element={<ProductDetails />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="pickups" element={<Pickups />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="organization" element={<OrganizationManagement />} />

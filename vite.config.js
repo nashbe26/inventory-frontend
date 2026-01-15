@@ -7,9 +7,8 @@ export default defineConfig({
     port: 3004,
     proxy: {
       '/api-inventory': {
-        target: 'http://149.202.55.111:3009',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-inventory/, '/api')
+        target: 'https://tndeals.store',
+        changeOrigin: true
       }
     }
   }

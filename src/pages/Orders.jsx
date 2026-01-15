@@ -1,9 +1,22 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import Modal from '../components/Modal';
+
+const statuses = ['en attente', 'confirmée', 'expédiée', 'livrée', 'payée', 'annulée', 'retournée'];
+
+const getStatusBadge = (status) => {
+    switch (status?.toLowerCase()) {
+        case 'payée': return 'badge-success';
+        case 'confirmée': return 'badge-warning';
+        case 'annulée': return 'badge-danger';
+        case 'livrée': return 'badge-info';
+        case 'expédiée': return 'badge-primary';
+        default: return 'badge-secondary';
+    }
+};
 
 export default function Orders() {
   const queryClient = useQueryClient();
@@ -13,11 +26,12 @@ export default function Orders() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [orderItems, setOrderItems] = useState([]);
-  const [customer, setCustomer] = useState({ name: '', phone: '', address: '' });
+  const [customer, setCustomer] = useState({ nom: '', telephone: '', adresse: '', gouvernerat: '', ville: '', telephone2: '' });
   const [source, setSource] = useState('Direct');
   const [notes, setNotes] = useState('');
   const [shipping, setShipping] = useState(8);
   const [productSearch, setProductSearch] = useState('');
+  const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
 
   const { data: ordersData, isLoading } = useQuery({
     queryKey: ['orders', statusFilter],
@@ -36,6 +50,33 @@ export default function Orders() {
       return res.data;
     }
   });
+
+  const orders = ordersData?.data || [];
+  
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = 
+        order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customer?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customer?.telephone?.includes(searchTerm);
+    return matchesSearch;
+  });
+
+  const filteredProducts = productSearch
+    ? (productsData?.data || []).filter(p => 
+        p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+        p.sku.toLowerCase().includes(productSearch.toLowerCase())
+      )
+    : [];
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setOrderItems([]);
+    setCustomer({ nom: '', telephone: '', adresse: '', gouvernerat: '', ville: '', telephone2: '' });
+    setSource('Direct');
+    setNotes('');
+    setShipping(8);
+    setProductSearch('');
+  };
 
   const createMutation = useMutation({
     mutationFn: async (orderData) => {
@@ -82,26 +123,81 @@ export default function Orders() {
     }
   });
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setOrderItems([]);
-    setCustomer({ name: '', phone: '', address: '' });
-    setSource('Direct');
-    setNotes('');
-    setShipping(8);
-    setProductSearch('');
-  };
+  const sendToDeliveryMutation = useMutation({
+    mutationFn: async (id) => {
+      const res = await api.post(`/delivery/send/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['orders']);
+      toast.success('Order sent to delivery service');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to send order to delivery');
+    }
+  });
 
-  // No changes to imports or top of file...
+  const syncStatusMutation = useMutation({
+    mutationFn: async (id) => {
+      const res = await api.put(`/delivery/sync/${id}`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['orders']);
+      toast.info(`Status synced: ${data.data?.status || 'Updated'}`);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to sync status');
+    }
+  });
+
+  const cancelDeliveryMutation = useMutation({
+    mutationFn: async (id) => {
+      const res = await api.post(`/delivery/cancel/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['orders']);
+      toast.success('Delivery cancelled successfully');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to cancel delivery');
+    }
+  });
+
+  const requestPickupMutation = useMutation({
+    mutationFn: async (ids) => {
+      const res = await api.post('/delivery/pickup', { orderIds: ids });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Pickup requested successfully');
+      setSelectedOrderIds(new Set()); 
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to request pickup');
+    }
+  });
+
+  const sendBulkMutation = useMutation({
+    mutationFn: async (ids) => {
+      const res = await api.post('/delivery/bulk-send', { orderIds: ids });
+      return res.data;
+    },
+    onSuccess: (data) => {
+        queryClient.invalidateQueries(['orders']);
+        toast.success(`Sent ${data.count} orders to delivery`);
+        setSelectedOrderIds(new Set());
+    },
+    onError: (error) => {
+        toast.error(error.response?.data?.message || 'Failed to send bulk orders');
+    }
+  });
 
   const addItemToOrder = (product, variant) => {
-    // Unique ID combining product and variant (if any)
     const itemKey = variant ? `${product._id}-${variant._id}` : product._id;
-    
-    // Find if already added
     const existingItem = orderItems.find(item => item.itemKey === itemKey);
     
-    // Determine info to display
     const displayName = variant 
       ? `${product.name} (${variant.colorId?.name || 'N/A'}, ${variant.sizeId?.label || 'N/A'})` 
       : product.name;
@@ -127,6 +223,10 @@ export default function Orders() {
     setProductSearch('');
   };
 
+  const removeItem = (itemKey) => {
+    setOrderItems(orderItems.filter(item => item.itemKey !== itemKey));
+  };
+
   const updateItemQuantity = (itemKey, quantity) => {
     if (quantity < 1) return;
     setOrderItems(orderItems.map(item =>
@@ -134,13 +234,27 @@ export default function Orders() {
     ));
   };
 
-  const removeItem = (itemKey) => {
-    setOrderItems(orderItems.filter(item => item.itemKey !== itemKey));
-  };
-
   const calculateTotal = () => {
     const subtotal = orderItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
     return subtotal + shipping;
+  };
+
+  const toggleOrderSelection = (id) => {
+    const newSelected = new Set(selectedOrderIds);
+    if (newSelected.has(id)) {
+        newSelected.delete(id);
+    } else {
+        newSelected.add(id);
+    }
+    setSelectedOrderIds(newSelected);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedOrderIds.size === filteredOrders.length) {
+        setSelectedOrderIds(new Set());
+    } else {
+        setSelectedOrderIds(new Set(filteredOrders.map(o => o._id)));
+    }
   };
 
   const handleSubmit = (e) => {
@@ -150,76 +264,71 @@ export default function Orders() {
       return;
     }
     createMutation.mutate({
-      items: orderItems.map(item => ({
-        productId: item.productId,
-        variantId: item.variantId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice
-      })),
-      shipping,
-      notes,
-      source,
-      customer: customer.name ? customer : { name: 'Walk-in Customer' },
+        customer,
+        items: orderItems.map(item => ({
+            product: item.productId,
+            variant: item.variantId,
+            quantity: item.quantity,
+            price: item.unitPrice
+        })),
+        shipping,
+        source,
+        notes
     });
   };
-
-  const filteredProducts = productsData?.data?.filter(product =>
-    product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-    product.sku?.toLowerCase().includes(productSearch.toLowerCase())
-  ) || [];
-
-  const filteredOrders = ordersData?.data?.filter(order =>
-    order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
-
-  const getStatusBadge = (status) => {
-    const badges = {
-      'En attente': 'badge-warning',
-      'Confirmée': 'badge-info',
-      'En cours de préparation': 'badge-info',
-      'En cours de livraison': 'badge-info',
-      'Livrée': 'badge-success',
-      'Annulée': 'badge-danger',
-      'Remboursée': 'badge-secondary'
-    };
-    return badges[status] || 'badge-secondary';
-  };
-
-  const statuses = ['En attente', 'Confirmée', 'En cours de préparation', 'En cours de livraison', 'Livrée', 'Annulée', 'Remboursée'];
 
   if (isLoading) return <div className="loading">Loading orders...</div>;
 
   return (
-    <div>
+    <div className="orders-page">
       <div className="page-header">
         <h1 className="page-title">Orders</h1>
-        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <FaPlus /> New Order
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+            {selectedOrderIds.size > 0 && (
+                <>
+                    <button className="btn btn-secondary" onClick={() => {
+                        const confirmedOrders = orders.filter(o => selectedOrderIds.has(o._id) && o.status?.toLowerCase() === 'confirmée');
+                        if (confirmedOrders.length === 0) {
+                             toast.warning("Only 'confirmée' orders can be sent to delivery.");
+                             return;
+                        }
+                        if (confirmedOrders.length < selectedOrderIds.size) {
+                             toast.info(`Sending ${confirmedOrders.length} confirmed orders out of ${selectedOrderIds.size} selected.`);
+                        }
+                        sendBulkMutation.mutate(confirmedOrders.map(o => o._id));
+                    }}>
+                        <FaTruck /> Send Bulk ({selectedOrderIds.size})
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => requestPickupMutation.mutate(Array.from(selectedOrderIds))}>
+                        <FaFileDownload /> Request Pickup ({selectedOrderIds.size})
+                    </button>
+                </>
+            )}
+            <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+            <FaPlus /> New Order
+            </button>
+        </div>
       </div>
 
-      {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
           <h3>Total Orders</h3>
-          <div className="stat-value">{ordersData?.pagination?.total || 0}</div>
+          <div className="stat-value">{ordersData?.pagination?.total || orders.length}</div>
         </div>
         <div className="stat-card">
           <h3>En attente</h3>
           <div className="stat-value" style={{ color: 'var(--warning-color)' }}>
-            {ordersData?.data?.filter(o => o.status === 'En attente').length || 0}
+            {orders.filter(o => o.status === 'En attente').length}
           </div>
         </div>
         <div className="stat-card">
           <h3>Total Revenue</h3>
           <div className="stat-value" style={{ color: 'var(--success-color)' }}>
-            {ordersData?.data?.reduce((sum, o) => sum + (o.status !== 'cancelled' ? o.total : 0), 0).toFixed(2) || '0.00'} dt
+            {orders.reduce((sum, o) => sum + (o.status !== 'annulée' ? o.total : 0), 0).toFixed(2)} dt
           </div>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="card" style={{ marginBottom: '20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           <div className="search-box">
@@ -245,29 +354,43 @@ export default function Orders() {
         </div>
       </div>
 
-      {/* Orders Table */}
       <div className="card">
         <div className="table-container">
-          <table>
+          <table className="table">
             <thead>
               <tr>
+                <th style={{ width: '40px' }}>
+                    <input 
+                        type="checkbox" 
+                        checked={filteredOrders.length > 0 && selectedOrderIds.size === filteredOrders.length}
+                        onChange={toggleAllSelection}
+                    />
+                </th>
                 <th>Order #</th>
                 <th>Customer</th>
                 <th>Items</th>
                 <th>Total</th>
                 <th>Status</th>
+                <th>Delivery</th>
                 <th>Date</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.length === 0 ? (
-                <tr><td colSpan="7" style={{ textAlign: 'center' }}>No orders found</td></tr>
+                <tr><td colSpan="9" style={{ textAlign: 'center' }}>No orders found</td></tr>
               ) : (
                 filteredOrders.map((order) => (
                   <tr key={order._id}>
+                    <td>
+                        <input 
+                            type="checkbox" 
+                            checked={selectedOrderIds.has(order._id)}
+                            onChange={() => toggleOrderSelection(order._id)}
+                        />
+                    </td>
                     <td><strong>{order.orderNumber}</strong></td>
-                    <td>{order.customer?.name || 'Walk-in Customer'}</td>
+                    <td>{order.customer?.nom || 'Walk-in Customer'}</td>
                     <td>{order.items?.length || 0} items</td>
                     <td><strong>{order.total?.toFixed(2)} dt</strong></td>
                     <td>
@@ -282,20 +405,72 @@ export default function Orders() {
                         ))}
                       </select>
                     </td>
+                    <td>
+                        {order.deliveryBarcode ? (
+                            <span className="badge badge-info" title={order.deliveryBarcode}>
+                                Sent <small>({order.deliveryState || 0})</small>
+                            </span>
+                        ) : (
+                            <span className="badge badge-secondary">Not Sent</span>
+                        )}
+                    </td>
                     <td>{new Date(order.createdAt).toLocaleDateString()}</td>
                     <td>
                       <button
                         className="btn btn-sm btn-primary"
                         onClick={() => { setSelectedOrder(order); setIsViewModalOpen(true); }}
                         style={{ marginRight: '5px' }}
+                        title="View Details"
                       >
                         <FaEye />
                       </button>
+                      
+                      {!order.deliveryBarcode && order.status?.toLowerCase() === 'confirmée' ? (
+                          <button
+                            className="btn btn-sm btn-success"
+                            onClick={() => {
+                                if(window.confirm(`Send Order ${order.orderNumber} to Delivery?`)) {
+                                    sendToDeliveryMutation.mutate(order._id);
+                                }
+                            }}
+                            style={{ marginRight: '5px' }}
+                            title="Send to Delivery"
+                          >
+                            <FaTruck />
+                          </button>
+                      ) : !order.deliveryBarcode ? null : (
+                          <>
+                            <button
+                                className="btn btn-sm btn-info"
+                                onClick={() => syncStatusMutation.mutate(order._id)}
+                                style={{ marginRight: '5px' }}
+                                title="Sync Status"
+                            >
+                                <FaSync />
+                            </button>
+                            {order.status !== 'Annulée' && (
+                                <button
+                                    className="btn btn-sm btn-warning"
+                                    onClick={() => {
+                                        if(window.confirm('Cancel delivery for this order?')) {
+                                            cancelDeliveryMutation.mutate(order._id);
+                                        }
+                                    }}
+                                    style={{ marginRight: '5px' }}
+                                    title="Cancel Delivery"
+                                >
+                                    <FaBan />
+                                </button>
+                            )}
+                          </>
+                      )}
+
                       <button
                         className="btn btn-sm btn-danger"
                         onClick={() => {
                           if (window.confirm('Delete this order?')) deleteMutation.mutate(order._id);
                         }}
+                        title="Delete Order"
                       >
                         <FaTrash />
                       </button>
@@ -308,7 +483,6 @@ export default function Orders() {
         </div>
       </div>
 
-      {/* Create Order Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal} title="Create New Order">
         <form onSubmit={handleSubmit}>
           <div className="relative mb-6">
@@ -353,7 +527,6 @@ export default function Orders() {
                              </div>
                         ));
                     } else {
-                        // Old product without variants (legacy fallback)
                         return (
                             <div
                                 key={product._id}
@@ -412,7 +585,7 @@ export default function Orders() {
                     ))}
                     <tr>
                       <td colSpan="3" style={{ textAlign: 'right' }}>Subtotal:</td>
-                      <td colSpan="2">{orderItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0).toFixed(2)} dt</td>
+                      <td colSpan="2">{calculateTotal().toFixed(2)} dt</td>
                     </tr>
                     <tr>
                       <td colSpan="3" style={{ textAlign: 'right' }}>Shipping:</td>
@@ -441,8 +614,9 @@ export default function Orders() {
           <div className="form-group">
             <label>Customer Info (Optional)</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-              <input type="text" className="form-control" placeholder="Name" value={customer.name}
-                onChange={(e) => setCustomer({ ...customer, name: e.target.value })} />
+              <input type="text" className="form-control" placeholder="Name (Nom)" value={customer.nom}
+                onChange={(e) => setCustomer({ ...customer, nom: e.target.value })} />
+              
               <select className="form-control" value={source}
                 onChange={(e) => setSource(e.target.value)}>
                 <option value="Direct">Direct</option>
@@ -451,10 +625,21 @@ export default function Orders() {
                 <option value="Social Media">Social Media</option>
                 <option value="Autre">Autre</option>
               </select>
-              <input type="tel" className="form-control" placeholder="Phone" value={customer.phone}
-                onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} />
-              <input type="text" className="form-control" placeholder="Address" value={customer.address}
-                onChange={(e) => setCustomer({ ...customer, address: e.target.value })} />
+
+              <input type="text" className="form-control" placeholder="Governorate" value={customer.gouvernerat}
+                onChange={(e) => setCustomer({ ...customer, gouvernerat: e.target.value })} />
+                
+              <input type="text" className="form-control" placeholder="City" value={customer.ville}
+                onChange={(e) => setCustomer({ ...customer, ville: e.target.value })} />
+
+              <input type="tel" className="form-control" placeholder="Phone" value={customer.telephone}
+                onChange={(e) => setCustomer({ ...customer, telephone: e.target.value })} />
+                
+              <input type="tel" className="form-control" placeholder="Phone 2 (Optional)" value={customer.telephone2}
+                onChange={(e) => setCustomer({ ...customer, telephone2: e.target.value })} />
+                
+              <input type="text" className="form-control" placeholder="Address" value={customer.adresse} style={{gridColumn: 'span 2'}}
+                onChange={(e) => setCustomer({ ...customer, adresse: e.target.value })} />
             </div>
           </div>
 
@@ -476,7 +661,6 @@ export default function Orders() {
         </form>
       </Modal>
 
-      {/* View Order Modal */}
       <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title={`Order ${selectedOrder?.orderNumber || ''}`}>
         {selectedOrder && (
           <div>
@@ -488,13 +672,32 @@ export default function Orders() {
             </div>
 
             <h4>Customer</h4>
-            <p><strong>Name:</strong> {selectedOrder.customer?.name || 'N/A'}</p>
+            <p><strong>Name:</strong> {selectedOrder.customer?.nom || 'N/A'}</p>
             <p><strong>Source:</strong> {selectedOrder.source || 'Direct'}</p>
-            {selectedOrder.customer?.phone && <p><strong>Phone:</strong> {selectedOrder.customer.phone}</p>}
-            {selectedOrder.customer?.address && <p><strong>Address:</strong> {selectedOrder.customer.address}</p>}
+            {selectedOrder.customer?.telephone && <p><strong>Phone:</strong> {selectedOrder.customer.telephone}</p>}
+            {selectedOrder.customer?.telephone2 && <p><strong>Phone 2:</strong> {selectedOrder.customer.telephone2}</p>}
+            {selectedOrder.customer?.adresse && <p><strong>Address:</strong> {selectedOrder.customer.adresse}, {selectedOrder.customer.ville}, {selectedOrder.customer.gouvernerat}</p>}
 
             {selectedOrder.notes && <h4 style={{ marginTop: '15px' }}>Notes</h4>}
             {selectedOrder.notes && <p>{selectedOrder.notes}</p>}
+            
+            {selectedOrder.deliveryBarcode && (
+                <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px' }}>
+                    <h4 style={{marginTop: 0}}>Delivery Info</h4>
+                    <p><strong>Barcode:</strong> {selectedOrder.deliveryBarcode}</p>
+                    <p><strong>State Code:</strong> {selectedOrder.deliveryState}</p>
+                    {selectedOrder.pickupDate && <p><strong>Pickup Date:</strong> {new Date(selectedOrder.pickupDate).toLocaleDateString()}</p>}
+                    {selectedOrder.deliveredDate && <p><strong>Delivered Date:</strong> {new Date(selectedOrder.deliveredDate).toLocaleDateString()}</p>}
+                    <div style={{ marginTop: '10px' }}>
+                         <button className="btn btn-sm btn-info" onClick={() => syncStatusMutation.mutate(selectedOrder._id)} style={{marginRight: '5px'}}>
+                            <FaSync /> Sync Status
+                         </button>
+                         <button className="btn btn-sm btn-warning" onClick={() => cancelDeliveryMutation.mutate(selectedOrder._id)}>
+                            <FaBan /> Cancel Delivery
+                         </button>
+                    </div>
+                </div>
+            )}
 
             <h4 style={{ marginTop: '15px' }}>Items</h4>
             {selectedOrder.items?.map((item, idx) => (

@@ -15,6 +15,7 @@ import {
   FaChartBar,
   FaUsers,
   FaMoneyBillWave,
+  FaHandHoldingUsd,
   FaTruck
 } from 'react-icons/fa'
 
@@ -70,6 +71,11 @@ export default function Layout() {
             <li>
               <NavLink to="/expenses" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaMoneyBillWave /> Expenses
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/supplier-expenses" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaHandHoldingUsd /> Supplier Expenses
               </NavLink>
             </li>
      

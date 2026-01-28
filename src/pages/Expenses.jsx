@@ -55,6 +55,7 @@ export default function Expenses() {
 
   const buildQueryParams = () => {
     const params = new URLSearchParams();
+    params.append('excludeSuppliers', 'true');
     if (search) params.append('search', search);
     if (categoryFilter) params.append('category', categoryFilter);
     if (dateRange.start) params.append('startDate', dateRange.start);
@@ -74,7 +75,7 @@ export default function Expenses() {
   const { data: statsData } = useQuery({
     queryKey: ['expense-stats'],
     queryFn: async () => {
-      const res = await api.get('/expenses/stats/overview');
+      const res = await api.get('/expenses/stats/overview?excludeSuppliers=true');
       return res.data;
     }
   });

@@ -50,7 +50,7 @@ export default function Expenses() {
 
   const [formData, setFormData] = useState({
     title: '', amount: '', category: '', description: '',
-    date: '', reference: '', isRecurring: false
+    date: '', reference: '', isRecurring: false, paidBy: ''
   });
 
   const buildQueryParams = () => {
@@ -77,6 +77,18 @@ export default function Expenses() {
     queryFn: async () => {
       const res = await api.get('/expenses/stats/overview?excludeSuppliers=true');
       return res.data;
+    }
+  });
+
+  const { data: usersList } = useQuery({
+    queryKey: ['org-users'],
+    queryFn: async () => {
+      const res = await api.get('/organizations/my/organization');
+      const owner = res.data.owner;
+      const members = res.data.members?.map(m => m.user) || [];
+      // Combine and dedup by ID just in case
+      const uniqueUsers = [owner, ...members].filter((v,i,a)=>a.findIndex(v2=>(v2._id===v._id))===i);
+      return uniqueUsers;
     }
   });
 
@@ -131,14 +143,16 @@ export default function Expenses() {
         description: expense.description || '',
         date: expense.date ? expense.date.split('T')[0] : '',
         reference: expense.reference || '',
-        isRecurring: expense.isRecurring || false
+        isRecurring: expense.isRecurring || false,
+        paidBy: expense.paidBy?._id || ''
       });
     } else {
       setEditingExpense(null);
       setFormData({
         title: '', amount: '', category: '', description: '',
         date: new Date().toISOString().split('T')[0],
-        reference: '', isRecurring: false
+        reference: '', isRecurring: false,
+        paidBy: '' // Default to empty (will use current user in backend if sent as undefined/null, but we want explicit selection or "Me")
       });
     }
     setShowModal(true);
@@ -261,6 +275,7 @@ export default function Expenses() {
                   <th>Date</th>
                   <th>Title</th>
                   <th>Category</th>
+                  <th>Paid By</th>
                   <th>Amount</th>
                   <th>Reference</th>
                   <th>Actions</th>
@@ -268,7 +283,7 @@ export default function Expenses() {
               </thead>
               <tbody>
                 {expenses.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign: 'center' }}>No expenses found</td></tr>
+                  <tr><td colSpan="7" style={{ textAlign: 'center' }}>No expenses found</td></tr>
                 ) : (
                   expenses.map((expense) => (
                     <tr key={expense._id}>
@@ -282,6 +297,22 @@ export default function Expenses() {
                         <span className={`badge ${categoryColors[expense.category] || 'badge-secondary'}`}>
                           {formatCategory(expense.category)}
                         </span>
+                      </td>
+                      <td>
+                        {expense.paidBy ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <div style={{ 
+                              width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#e0e7ff', 
+                              color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.75rem', fontWeight: 'bold'
+                            }}>
+                              {expense.paidBy.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span style={{ fontSize: '0.85rem' }}>{expense.paidBy.name}</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>-</span>
+                        )}
                       </td>
                       <td style={{ fontWeight: '700' }}>{expense.amount.toFixed(2)} dt</td>
                       <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{expense.reference || '-'}</td>
@@ -335,7 +366,7 @@ export default function Expenses() {
               required
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
             <div className="form-group">
               <label>Amount *</label>
               <input
@@ -359,6 +390,19 @@ export default function Expenses() {
                 <option value="">Select Category</option>
                 {CATEGORIES.map(cat => (
                   <option key={cat} value={cat}>{formatCategory(cat)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Paid By</label>
+              <select
+                className="form-control"
+                value={formData.paidBy}
+                onChange={(e) => setFormData({ ...formData, paidBy: e.target.value })}
+              >
+                <option value="">(Me)</option>
+                {usersList?.map(u => (
+                  <option key={u._id} value={u._id}>{u.name}</option>
                 ))}
               </select>
             </div>

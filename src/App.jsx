@@ -19,6 +19,7 @@ import Orders from './pages/Orders'
 import Analytics from './pages/Analytics'
 import Expenses from './pages/Expenses'
 import SupplierExpenses from './pages/SupplierExpenses'
+import UserExpensesReport from './pages/UserExpensesReport'
 import OrganizationSetup from './pages/OrganizationSetup'
 import OrganizationManagement from './pages/OrganizationManagement'
 import AcceptInvitation from './pages/AcceptInvitation'
@@ -59,6 +60,7 @@ function App() {
           <Route path="analytics" element={<Analytics />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="supplier-expenses" element={<SupplierExpenses />} />
+          <Route path="user-expenses-report" element={<UserExpensesReport />} />
           <Route path="organization" element={<OrganizationManagement />} />
         </Route>
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   FaPlus, 
@@ -64,7 +64,7 @@ const ProgressBar = ({ paid, total }) => {
 
 // --- History Table Component ---
 
-const SupplierHistory = ({ supplierId }) => {
+const SupplierHistory = ({ supplierId, onPay }) => {
   const { data: transactions, isLoading } = useQuery({
     queryKey: ['supplier-transactions', supplierId],
     queryFn: async () => {
@@ -92,31 +92,73 @@ const SupplierHistory = ({ supplierId }) => {
              <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
              <th className="px-4 py-3 text-left font-semibold text-gray-600">Produit / Description</th>
              <th className="px-4 py-3 text-right font-semibold text-gray-600">Montant Total</th>
-             <th className="px-4 py-3 text-right font-semibold text-gray-600">Payé</th>
+             <th className="px-4 py-3 text-right font-semibold text-gray-600">Reste à payer</th>
              <th className="px-4 py-3 text-center font-semibold text-gray-600">Statut</th>
+             <th className="px-4 py-3 text-right font-semibold text-gray-600">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 bg-white">
-          {transactions.map((tx) => (
-            <tr key={tx._id} className="hover:bg-gray-50 transition-colors">
-              <td className="px-4 py-3 text-gray-600">
-                {format(new Date(tx.date), 'dd MMM yyyy', { locale: fr })}
-              </td>
-              <td className="px-4 py-3 font-medium text-gray-800">
-                {tx.product?.reference || tx.description || 'N/A'}
-                {tx.title === 'Règlement dette' && <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-100">Règlement</span>}
-              </td>
-              <td className="px-4 py-3 text-right font-mono text-gray-700">
-                {tx.amount > 0 ? tx.amount.toLocaleString('fr-FR') : '-'}
-              </td>
-              <td className="px-4 py-3 text-right font-mono text-green-700 font-medium">
-                {tx.paidAmount.toLocaleString('fr-FR')}
-              </td>
-              <td className="px-4 py-3 text-center">
-                <Badge type={tx.paymentStatus}>{tx.paymentStatus}</Badge>
-              </td>
-            </tr>
-          ))}
+          {transactions.map((tx) => {
+            const remaining = tx.amount - tx.paidAmount;
+            return (
+              <Fragment key={tx._id}>
+                <tr className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 text-gray-600">
+                    {format(new Date(tx.date), 'dd MMM yyyy', { locale: fr })}
+                  </td>
+                  <td className="px-4 py-3 font-medium text-gray-800">
+                    {tx.products?.[0]?.product?.name || tx.description || tx.title || 'N/A'}
+                    {tx.title === 'Règlement dette' && <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-100">Règlement</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-gray-700">
+                    {tx.amount > 0 ? tx.amount.toLocaleString('fr-FR') : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-red-600 font-medium">
+                    {remaining > 0 ? remaining.toLocaleString('fr-FR') : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge type={tx.paymentStatus}>{tx.paymentStatus}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {remaining > 0 && tx.amount > 0 && (
+                      <button 
+                        onClick={() => onPay(tx)}
+                        className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full hover:bg-indigo-100 font-medium transition-colors"
+                      >
+                        Payer
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                 {/* Payment History Sub-rows */}
+                 {tx.paymentHistory && tx.paymentHistory.length > 0 && (
+                   <tr className="bg-gray-50/50">
+                     <td colSpan="6" className="px-4 py-2 border-t border-gray-100">
+                       <div className="ml-8 pl-4 border-l-2 border-indigo-200">
+                         <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Historique des paiements</p>
+                         <div className="space-y-2">
+                           {tx.paymentHistory.map((pmt, idx) => (
+                             <div key={idx} className="flex items-center text-xs text-gray-600 gap-4 bg-white p-2 rounded shadow-sm border border-gray-100 max-w-3xl">
+                               <span className="w-24 font-medium">{format(new Date(pmt.date), 'dd MMM yyyy', { locale: fr })}</span>
+                               <span className="flex-1 font-mono text-green-600 font-bold">+{pmt.amount.toLocaleString('fr-FR')} DA</span>
+                               <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-500 border border-gray-200">{pmt.method}</span>
+                               <span className="text-gray-500 flex items-center gap-1" title="Effectué par">
+                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                   <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                 </svg>
+                                 {pmt.paidBy?.name || 'Inconnu'}
+                               </span>
+                               {pmt.note && <span className="text-gray-400 italic flex-1 truncate">"{pmt.note}"</span>}
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                     </td>
+                   </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -127,6 +169,13 @@ const SupplierHistory = ({ supplierId }) => {
 
 export default function SupplierExpenses() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash'); 
+  const [paymentNote, setPaymentNote] = useState('');
+  const [paymentPaidBy, setPaymentPaidBy] = useState('');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   
@@ -219,6 +268,25 @@ export default function SupplierExpenses() {
     onError: () => toast.error("Erreur lors de l'enregistrement")
   });
 
+  // Add Payment Mutation
+  const addPaymentMutation = useMutation({
+    mutationFn: async ({ id, amount, date, method, note, paidBy }) => {
+      return api.post(`/expenses/${id}/payments`, { amount, date, method, note, paidBy });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['supplier-financials']);
+      queryClient.invalidateQueries(['supplier-transactions']);
+      toast.success('Paiement enregistré avec succès');
+      setIsPayModalOpen(false);
+      setSelectedInvoice(null);
+      setPayAmount('');
+      setPaymentMethod('Cash');
+      setPaymentNote('');
+      setPaymentPaidBy('');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || "Erreur lors du paiement")
+  });
+
   // Form Handlers
   const handleProductChange = (productId) => {
     const product = productsList?.find(p => p._id === productId);
@@ -271,6 +339,34 @@ export default function SupplierExpenses() {
     };
 
     createMutation.mutate(payload);
+  };
+
+  const openPayModal = (invoice) => {
+    setSelectedInvoice(invoice);
+    setPayAmount(String(invoice.amount - invoice.paidAmount)); // Propose paying the remaining
+    setIsPayModalOpen(true);
+  };
+
+  const handlePaySubmit = (e) => {
+    e.preventDefault();
+    if (!selectedInvoice) return;
+
+    const payment = Number(payAmount);
+    
+    // Safety check just in case
+    if (payment <= 0) {
+        toast.error("Le montant doit être supérieur à 0");
+        return;
+    }
+
+    addPaymentMutation.mutate({
+      id: selectedInvoice._id,
+      amount: payment,
+      date: new Date(), // Could add a date picker if needed, but 'now' is fine for quick payment
+      method: paymentMethod,
+      note: paymentNote,
+      paidBy: paymentPaidBy || undefined
+    });
   };
 
   return (
@@ -422,7 +518,7 @@ export default function SupplierExpenses() {
                       Historique des transactions
                     </h4>
                   </div>
-                  <SupplierHistory supplierId={s.fournisseur._id} />
+                  <SupplierHistory supplierId={s.fournisseur._id} onPay={openPayModal} />
                 </div>
               )}
             </div>
@@ -624,6 +720,89 @@ export default function SupplierExpenses() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Pay Invoice Modal */}
+      <Modal isOpen={isPayModalOpen} onClose={() => setIsPayModalOpen(false)} title="Régler une facture">
+         <form onSubmit={handlePaySubmit}>
+            <div className="mb-4 bg-indigo-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-500 mb-1">Reste à payer sur cette facture</p>
+                <p className="text-2xl font-bold text-indigo-700">{(selectedInvoice?.amount - selectedInvoice?.paidAmount)?.toLocaleString()} DA</p>
+                <p className="text-xs text-gray-400 mt-1">Total facture: {selectedInvoice?.amount?.toLocaleString()} DA</p>
+            </div>
+
+            <div className="form-group mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Montant du versement (DA)</label>
+                <div className="relative">
+                    <input
+                        type="number"
+                        className="w-full pl-4 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-mono text-lg"
+                        value={payAmount}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                        required
+                        min="1"
+                        autoFocus
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">DA</span>
+                </div>
+            </div>
+
+            <div className="form-group mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Mode de paiement</label>
+                <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                    <option value="Cash">Espèces</option>
+                    <option value="Check">Chèque</option>
+                    <option value="Bank Transfer">Virement</option>
+                    <option value="Other">Autre</option>
+                </select>
+            </div>
+
+            <div className="form-group mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Effectué par</label>
+                <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    value={paymentPaidBy}
+                    onChange={(e) => setPaymentPaidBy(e.target.value)}
+                >
+                    <option value="">(Moi-même)</option>
+                    {usersList?.map(u => (
+                        <option key={u._id} value={u._id}>{u.name}</option>
+                    ))}
+                </select>
+            </div>
+
+            <div className="form-group mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Note (Optionnel)</label>
+                <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="Ex: N° Chèque, Remarque..."
+                    value={paymentNote}
+                    onChange={(e) => setPaymentNote(e.target.value)}
+                />
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+                <button
+                    type="button"
+                    onClick={() => setIsPayModalOpen(false)}
+                    className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium"
+                >
+                    Annuler
+                </button>
+                <button
+                    type="submit"
+                    disabled={addPaymentMutation.isPending}
+                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm font-medium transition-all transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                    {addPaymentMutation.isPending ? 'Traitement...' : 'Confirmer le paiement'}
+                </button>
+            </div>
+         </form>
       </Modal>
     </div>
   );

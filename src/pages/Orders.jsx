@@ -1,24 +1,28 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import Modal from '../components/Modal';
+import { useAuth } from '../contexts/AuthContext';
 
-const statuses = ['en attente', 'confirmée', 'expédiée', 'livrée', 'payée', 'annulée', 'retournée'];
+const statuses = ['En Attente', 'Confirmé', 'Préparé', 'Expédié', 'Livré', 'Annulé'];
 
 const getStatusBadge = (status) => {
-    switch (status?.toLowerCase()) {
-        case 'payée': return 'badge-success';
-        case 'confirmée': return 'badge-warning';
-        case 'annulée': return 'badge-danger';
-        case 'livrée': return 'badge-info';
-        case 'expédiée': return 'badge-primary';
+    if (!status) return 'badge-secondary';
+    switch (status.toLowerCase()) {
+        case 'payé': return 'badge-success';
+        case 'confirmé': return 'badge-warning';
+        case 'préparé': return 'badge-info'; // light blue
+        case 'expédié': return 'badge-primary';
+        case 'livré': return 'badge-success';
+        case 'annulé': return 'badge-danger';
         default: return 'badge-secondary';
     }
 };
 
 export default function Orders() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -394,16 +398,22 @@ export default function Orders() {
                     <td>{order.items?.length || 0} items</td>
                     <td><strong>{order.total?.toFixed(2)} dt</strong></td>
                     <td>
-                      <select
-                        className={`badge ${getStatusBadge(order.status)}`}
-                        value={order.status}
-                        onChange={(e) => updateStatusMutation.mutate({ id: order._id, status: e.target.value })}
-                        style={{ cursor: 'pointer', border: 'none' }}
-                      >
-                        {statuses.map(status => (
-                          <option key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
-                        ))}
-                      </select>
+                      {(user.role === 'admin' || user.role === 'manager') ? (
+                        <select
+                          className={`badge ${getStatusBadge(order.status)}`}
+                          value={order.status}
+                          onChange={(e) => updateStatusMutation.mutate({ id: order._id, status: e.target.value })}
+                          style={{ cursor: 'pointer', border: 'none' }}
+                        >
+                          {statuses.map(status => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={`badge ${getStatusBadge(order.status)}`}>
+                            {order.status}
+                        </span>
+                      )}
                     </td>
                     <td>
                         {order.deliveryBarcode ? (
@@ -424,56 +434,96 @@ export default function Orders() {
                       >
                         <FaEye />
                       </button>
-                      
-                      {!order.deliveryBarcode && order.status?.toLowerCase() === 'confirmée' ? (
-                          <button
-                            className="btn btn-sm btn-success"
-                            onClick={() => {
-                                if(window.confirm(`Send Order ${order.orderNumber} to Delivery?`)) {
-                                    sendToDeliveryMutation.mutate(order._id);
-                                }
-                            }}
-                            style={{ marginRight: '5px' }}
-                            title="Send to Delivery"
-                          >
-                            <FaTruck />
-                          </button>
-                      ) : !order.deliveryBarcode ? null : (
+
+                      {(user.role === 'admin' || user.role === 'manager') && (
                           <>
-                            <button
-                                className="btn btn-sm btn-info"
-                                onClick={() => syncStatusMutation.mutate(order._id)}
-                                style={{ marginRight: '5px' }}
-                                title="Sync Status"
-                            >
-                                <FaSync />
-                            </button>
-                            {order.status !== 'Annulée' && (
-                                <button
-                                    className="btn btn-sm btn-warning"
+                              {!order.deliveryBarcode && order.status?.toLowerCase() === 'confirmé' ? (
+                                  <button
+                                    className="btn btn-sm btn-success"
                                     onClick={() => {
-                                        if(window.confirm('Cancel delivery for this order?')) {
-                                            cancelDeliveryMutation.mutate(order._id);
+                                        if(window.confirm(`Send Order ${order.orderNumber} to Delivery?`)) {
+                                            sendToDeliveryMutation.mutate(order._id);
                                         }
                                     }}
                                     style={{ marginRight: '5px' }}
-                                    title="Cancel Delivery"
+                                    title="Send to Delivery"
+                                  >
+                                    <FaTruck />
+                                  </button>
+                              ) : !order.deliveryBarcode ? null : (
+                                  <>
+                                    <button
+                                        className="btn btn-sm btn-info"
+                                        onClick={() => syncStatusMutation.mutate(order._id)}
+                                        style={{ marginRight: '5px' }}
+                                        title="Sync Status"
+                                    >
+                                        <FaSync />
+                                    </button>
+                                    {order.status !== 'Annulée' && order.status !== 'Annulé' && (
+                                        <button
+                                            className="btn btn-sm btn-warning"
+                                            onClick={() => {
+                                                if(window.confirm('Cancel delivery for this order?')) {
+                                                    cancelDeliveryMutation.mutate(order._id);
+                                                }
+                                            }}
+                                            style={{ marginRight: '5px' }}
+                                            title="Cancel Delivery"
+                                        >
+                                            <FaBan />
+                                        </button>
+                                    )}
+                                  </>
+                              )}
+
+                              <button
+                                className="btn btn-sm btn-danger"
+                                onClick={() => {
+                                  if (window.confirm('Delete this order?')) deleteMutation.mutate(order._id);
+                                }}
+                                title="Delete Order"
+                              >
+                                <FaTrash />
+                              </button>
+                          </>
+                      )}
+
+                      {user.role === 'supplier' && order.status === 'Confirmé' && (
+                          <button
+                            className="btn btn-sm btn-success"
+                            onClick={() => updateStatusMutation.mutate({ id: order._id, status: 'Préparé' })}
+                            style={{ marginRight: '5px' }}
+                            title="Mark as Prepared"
+                          >
+                            <FaBoxOpen className="mr-1" /> Ready
+                          </button>
+                      )}
+
+                      {user.role === 'delivery_man' && (
+                          <>
+                            {(order.status === 'Préparé') && (
+                                <button
+                                    className="btn btn-sm btn-primary"
+                                    onClick={() => updateStatusMutation.mutate({ id: order._id, status: 'Expédié' })}
+                                    style={{ marginRight: '5px' }}
+                                    title="Pick Up Order"
                                 >
-                                    <FaBan />
+                                    <FaShippingFast className="mr-1" /> Pick Up
+                                </button>
+                            )}
+                            {order.status === 'Expédié' && (
+                                <button
+                                    className="btn btn-sm btn-success"
+                                    onClick={() => updateStatusMutation.mutate({ id: order._id, status: 'Livré' })}
+                                    style={{ marginRight: '5px' }}
+                                    title="Mark Delivered"
+                                >
+                                    <FaCheck className="mr-1" /> Delivered
                                 </button>
                             )}
                           </>
                       )}
-
-                      <button
-                        className="btn btn-sm btn-danger"
-                        onClick={() => {
-                          if (window.confirm('Delete this order?')) deleteMutation.mutate(order._id);
-                        }}
-                        title="Delete Order"
-                      >
-                        <FaTrash />
-                      </button>
                     </td>
                   </tr>
                 ))

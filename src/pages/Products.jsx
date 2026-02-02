@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { productService, categoryService, colorService, sizeService, rayonService, fournisseurService } from '../services';
+import { productService, categoryService, colorService, sizeService, rayonService, fournisseurService, materialService } from '../services';
 import { toast } from 'react-toastify';
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaEye } from 'react-icons/fa';
 import Modal from '../components/Modal';
@@ -19,7 +19,7 @@ export default function Products() {
   });
   const [page, setPage] = useState(1);
   const [formData, setFormData] = useState({
-    name: '', categoryId: '', rayonId: '', fournisseurId: '',
+    name: '', categoryId: '', rayonId: '', fournisseurId: '', materialId: '',
     price: '', buyingPrice: '', description: '', lowStockThreshold: 10,
     variants: []
   });
@@ -67,6 +67,11 @@ export default function Products() {
   const { data: rayons } = useQuery({
     queryKey: ['rayons'],
     queryFn: async () => (await rayonService.getAll()).data.data
+  });
+
+  const { data: materials } = useQuery({
+    queryKey: ['materials'],
+    queryFn: async () => (await materialService.getAll()).data.data
   });
 
   const createMutation = useMutation({
@@ -370,6 +375,20 @@ export default function Products() {
                 <option value="">Select Supplier</option>
                 {fournisseurs?.map(f => (
                   <option key={f._id} value={f._id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Material</label>
+              <select
+                className="form-control"
+                value={formData.materialId}
+                onChange={(e) => setFormData({ ...formData, materialId: e.target.value })}
+              >
+                <option value="">Select Material</option>
+                {materials?.map(m => (
+                  <option key={m._id} value={m._id}>{m.name}</option>
                 ))}
               </select>
             </div>

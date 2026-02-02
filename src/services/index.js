@@ -53,6 +53,13 @@ export const fournisseurService = {
   delete: (id) => api.delete(`/fournisseurs/${id}`)
 };
 
+export const materialService = {
+  getAll: () => api.get('/materials'),
+  create: (data) => api.post('/materials', data),
+  update: (id, data) => api.put(`/materials/${id}`, data),
+  delete: (id) => api.delete(`/materials/${id}`)
+};
+
 export const inventoryService = {
   adjust: (data) => api.post('/inventory/adjust', data),
   getLowStock: () => api.get('/inventory/low-stock'),

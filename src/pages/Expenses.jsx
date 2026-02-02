@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaEdit, FaTrash, FaSearch, FaWallet } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaSearch, FaWallet, FaDownload } from 'react-icons/fa';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from 'react-toastify';
 import Modal from '../components/Modal';
 import api from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const CATEGORIES = [
   'inventory_purchase', 'shipping_delivery', 'packaging_supplies', 'marketing_ads',
@@ -32,6 +34,28 @@ const categoryColors = {
   other: 'badge-light'
 };
 
+const CHART_COLORS = {
+  inventory_purchase: '#6366f1', // primary-like
+  shipping_delivery: '#3b82f6', // info-like
+  packaging_supplies: '#ec4899', // pink
+  marketing_ads: '#f59e0b', // warning
+  website_hosting: '#06b6d4', // cyan
+  payment_processing: '#22c55e', // success
+  rent_warehouse: '#8b5cf6', // purple
+  utilities: '#eab308', // yellow
+  salaries_wages: '#3730a3', // indigo
+  software_subscriptions: '#0ea5e9', // sky
+  office_supplies: '#64748b', // slate
+  returns_refunds: '#ef4444', // red
+  taxes_fees: '#dc2626', // red-600
+  insurance: '#94a3b8', // blue-gray
+  maintenance_repairs: '#d97706', // amber
+  professional_services: '#10b981', // emerald
+  other: '#9ca3af' // gray
+};
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
 const formatCategory = (category) => {
   if (!category) return '';
   return category
@@ -41,6 +65,7 @@ const formatCategory = (category) => {
 };
 
 export default function Expenses() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
@@ -94,6 +119,45 @@ export default function Expenses() {
 
   const expenses = expensesData?.data || [];
   const stats = statsData?.data;
+
+  // Pie Chart Data Preparation
+  const pieData = useMemo(() => {
+    if (!stats?.byCategory) return [];
+    return stats.byCategory.map(item => ({
+      name: formatCategory(item.category),
+      value: item.total,
+      rawCategory: item.category
+    })).filter(item => item.value > 0);
+  }, [stats]);
+
+  const exportToCSV = () => {
+    if (!expenses.length) return toast.warn("No expenses to export");
+    
+    const headers = ["Date", "Title", "Category", "Amount", "Paid By", "Reference", "Description"];
+    
+    // Helper to escape quotes
+    const escape = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + headers.join(",") + "\n"
+        + expenses.map(e => [
+            new Date(e.date).toLocaleDateString(),
+            escape(e.title),
+            formatCategory(e.category),
+            e.amount,
+            escape(e.paidBy?.name),
+            escape(e.reference),
+            escape(e.description)
+        ].join(",")).join("\n");
+        
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `expenses_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const createMutation = useMutation({
     mutationFn: (data) => api.post('/expenses', data),
@@ -165,7 +229,15 @@ export default function Expenses() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
     const payload = { ...formData, amount: parseFloat(formData.amount) };
+
+    // Validate/Fix paidBy
+    // If paidBy is empty (meaning "(Me)" was selected), explicitly set it to current user's ID
+    if (!payload.paidBy && user) {
+        payload.paidBy = user._id;
+    }
+
     if (editingExpense) {
       updateMutation.mutate({ id: editingExpense._id, data: payload });
     } else {
@@ -180,82 +252,128 @@ export default function Expenses() {
   };
 
   return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title"><FaWallet style={{ marginRight: '10px' }} /> Expenses</h1>
-        <button className="btn btn-primary" onClick={() => openModal()}>
-          <FaPlus style={{ marginRight: '8px' }} /> Add Expense
-        </button>
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <div>
+           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+             <FaWallet className="text-indigo-600" />
+             Expenses Management
+           </h1>
+           <p className="text-gray-500 mt-1">Track and manage your operational expenses</p>
+        </div>
+        <div className="flex gap-3">
+          <button className="btn btn-secondary flex items-center gap-2" onClick={exportToCSV}>
+            <FaDownload /> Export CSV
+          </button>
+          <button className="btn btn-primary flex items-center gap-2" onClick={() => openModal()}>
+            <FaPlus /> Add Expense
+          </button>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <h3>All Time</h3>
-          <div className="stat-value">{(stats?.allTime?.total || 0).toFixed(2)} dt</div>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>{stats?.allTime?.count || 0} expenses</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Stats Column */}
+        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 transition-all hover:shadow-md">
+              <h3 className="text-gray-500 font-medium text-sm text-transform uppercase">All Time</h3>
+              <div className="text-2xl font-bold text-gray-800 mt-2">{(stats?.allTime?.total || 0).toFixed(2)} dt</div>
+              <p className="text-gray-400 text-sm mt-1">{stats?.allTime?.count || 0} expenses</p>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 transition-all hover:shadow-md">
+              <h3 className="text-gray-500 font-medium text-sm text-transform uppercase">This Month</h3>
+              <div className="text-2xl font-bold text-gray-800 mt-2">{(stats?.thisMonth?.total || 0).toFixed(2)} dt</div>
+              <p className="text-gray-400 text-sm mt-1">{stats?.thisMonth?.count || 0} expenses</p>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 transition-all hover:shadow-md">
+              <h3 className="text-gray-500 font-medium text-sm text-transform uppercase">Last Month</h3>
+              <div className="text-2xl font-bold text-gray-800 mt-2">{(stats?.lastMonth?.total || 0).toFixed(2)} dt</div>
+              <p className="text-gray-400 text-sm mt-1">{stats?.lastMonth?.count || 0} expenses</p>
+            </div>
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 transition-all hover:shadow-md">
+              <h3 className="text-gray-500 font-medium text-sm text-transform uppercase">Top Category</h3>
+              <div className="text-xl font-bold text-gray-800 mt-2 capitalize text-ellipsis overflow-hidden whitespace-nowrap">
+                {formatCategory(stats?.byCategory?.[0]?.category) || 'N/A'}
+              </div>
+              <p className="text-gray-400 text-sm mt-1">
+                {(stats?.byCategory?.[0]?.total || 0).toFixed(2)} dt
+              </p>
+            </div>
         </div>
-        <div className="stat-card">
-          <h3>This Month</h3>
-          <div className="stat-value">{(stats?.thisMonth?.total || 0).toFixed(2)} dt</div>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>{stats?.thisMonth?.count || 0} expenses</p>
-        </div>
-        <div className="stat-card">
-          <h3>Last Month</h3>
-          <div className="stat-value">{(stats?.lastMonth?.total || 0).toFixed(2)} dt</div>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>{stats?.lastMonth?.count || 0} expenses</p>
-        </div>
-        <div className="stat-card">
-          <h3>Top Category</h3>
-          <div className="stat-value" style={{ textTransform: 'capitalize', fontSize: '1.125rem' }}>
-            {formatCategory(stats?.byCategory?.[0]?.category) || 'N/A'}
-          </div>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '5px' }}>
-            {(stats?.byCategory?.[0]?.total || 0).toFixed(2)} dt
-          </p>
+
+        {/* Right Chart Column */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 lg:row-span-2 flex flex-col justify-center items-center">
+            <h3 className="text-gray-600 font-semibold mb-4 w-full text-left">Expense Distribution</h3>
+            {pieData.length > 0 ? (
+              <div className="w-full h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie 
+                      data={pieData} 
+                      dataKey="value" 
+                      nameKey="name" 
+                      cx="50%" 
+                      cy="50%" 
+                      innerRadius={60}
+                      outerRadius={80} 
+                      paddingAngle={5}
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[entry.rawCategory] || COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value) => `${value.toLocaleString()} dt`} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+               <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+                  <FaSearch className="text-3xl mb-2" />
+                  <p>No data available</p>
+               </div>
+            )}
         </div>
       </div>
 
       {/* Filters */}
-      <div className="card" style={{ marginBottom: '25px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', alignItems: 'end' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Search</label>
-            <div style={{ position: 'relative' }}>
-              <FaSearch style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="form-group mb-0">
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Search</label>
+            <div className="relative">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                className="form-control"
-                style={{ paddingLeft: '38px' }}
-                placeholder="Search expenses..."
+                className="form-control pl-10 w-full"
+                placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Category</label>
-            <select className="form-control" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <div className="form-group mb-0">
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Category</label>
+            <select className="form-control w-full" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
               <option value="">All Categories</option>
               {CATEGORIES.map(cat => (
                 <option key={cat} value={cat}>{formatCategory(cat)}</option>
               ))}
             </select>
           </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>From Date</label>
+          <div className="form-group mb-0">
+            <label className="text-sm font-medium text-gray-700 mb-1 block">From Date</label>
             <input
               type="date"
-              className="form-control"
+              className="form-control w-full"
               value={dateRange.start}
               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
             />
           </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>To Date</label>
+          <div className="form-group mb-0">
+            <label className="text-sm font-medium text-gray-700 mb-1 block">To Date</label>
             <input
               type="date"
-              className="form-control"
+              className="form-control w-full"
               value={dateRange.end}
               onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
             />
@@ -264,63 +382,52 @@ export default function Expenses() {
       </div>
 
       {/* Expenses Table */}
-      <div className="card">
-        <div className="table-container">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
           {isLoading ? (
-            <div className="loading">Loading expenses...</div>
+            <div className="p-8 text-center text-gray-500">Loading expenses...</div>
           ) : (
-            <table>
-              <thead>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <th>Date</th>
-                  <th>Title</th>
-                  <th>Category</th>
-                  <th>Paid By</th>
-                  <th>Amount</th>
-                  <th>Reference</th>
-                  <th>Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paid By</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white divide-y divide-gray-200">
                 {expenses.length === 0 ? (
-                  <tr><td colSpan="7" style={{ textAlign: 'center' }}>No expenses found</td></tr>
+                  <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-500">No expenses found</td></tr>
                 ) : (
                   expenses.map((expense) => (
-                    <tr key={expense._id}>
-                      <td>{new Date(expense.date).toLocaleDateString()}</td>
-                      <td>
-                        <strong>{expense.title}</strong>
-                        {expense.isRecurring && <span className="badge badge-info" style={{ marginLeft: '8px' }}>Recurring</span>}
-                        {expense.description && <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>{expense.description}</p>}
+                    <tr key={expense._id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(expense.date).toLocaleDateString()}
                       </td>
-                      <td>
-                        <span className={`badge ${categoryColors[expense.category] || 'badge-secondary'}`}>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{expense.title}</div>
+                        {expense.description && <div className="text-xs text-gray-500 truncate max-w-xs">{expense.description}</div>}
+                        {expense.reference && <div className="text-xs text-mono text-gray-400 mt-0.5">Ref: {expense.reference}</div>}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${categoryColors[expense.category] === 'badge-primary' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'}`}>
                           {formatCategory(expense.category)}
                         </span>
                       </td>
-                      <td>
-                        {expense.paidBy ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <div style={{ 
-                              width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#e0e7ff', 
-                              color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '0.75rem', fontWeight: 'bold'
-                            }}>
-                              {expense.paidBy.name.charAt(0).toUpperCase()}
-                            </div>
-                            <span style={{ fontSize: '0.85rem' }}>{expense.paidBy.name}</span>
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>-</span>
-                        )}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {expense.paidBy ? expense.paidBy.name : '-'}
                       </td>
-                      <td style={{ fontWeight: '700' }}>{expense.amount.toFixed(2)} dt</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{expense.reference || '-'}</td>
-                      <td>
-                        <button className="btn btn-sm btn-secondary" onClick={() => openModal(expense)} style={{ marginRight: '5px' }}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                        {expense.amount.toFixed(2)} dt
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button className="text-indigo-600 hover:text-indigo-900 mr-4" onClick={() => openModal(expense)}>
                           <FaEdit />
                         </button>
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(expense._id)}>
+                        <button className="text-red-600 hover:text-red-900" onClick={() => handleDelete(expense._id)}>
                           <FaTrash />
                         </button>
                       </td>
@@ -333,56 +440,36 @@ export default function Expenses() {
         </div>
       </div>
 
-      {/* Category Breakdown */}
-      {stats?.byCategory?.length > 0 && (
-        <div className="card" style={{ marginTop: '25px' }}>
-          <h3>Expenses by Category (This Month)</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px', marginTop: '15px' }}>
-            {stats.byCategory.map((cat) => (
-              <div key={cat.category} style={{ padding: '15px', background: 'var(--bg-secondary)', borderRadius: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className={`badge ${categoryColors[cat.category] || 'badge-secondary'}`}>{formatCategory(cat.category)}</span>
-                  <span style={{ fontWeight: '700' }}>{cat.total.toFixed(2)} dt</span>
-                </div>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: 0 }}>
-                  {cat.count} expense{cat.count !== 1 ? 's' : ''}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Modal */}
       <Modal isOpen={showModal} onClose={closeModal} title={editingExpense ? 'Edit Expense' : 'Add Expense'}>
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Title *</label>
+          <div className="form-group mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
             <input
               type="text"
-              className="form-control"
+              className="form-control w-full"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               required
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div className="form-group">
-              <label>Amount *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                className="form-control"
+                className="form-control w-full"
                 value={formData.amount}
                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                 required
               />
             </div>
             <div className="form-group">
-              <label>Category *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
               <select
-                className="form-control"
+                className="form-control w-full"
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 required
@@ -394,9 +481,9 @@ export default function Expenses() {
               </select>
             </div>
             <div className="form-group">
-              <label>Paid By</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Paid By</label>
               <select
-                className="form-control"
+                className="form-control w-full"
                 value={formData.paidBy}
                 onChange={(e) => setFormData({ ...formData, paidBy: e.target.value })}
               >
@@ -407,47 +494,48 @@ export default function Expenses() {
               </select>
             </div>
           </div>
-          <div className="form-group">
-            <label>Date *</label>
+          <div className="form-group mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
             <input
               type="date"
-              className="form-control"
+              className="form-control w-full"
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
               required
             />
           </div>
-          <div className="form-group">
-            <label>Reference / Receipt #</label>
+          <div className="form-group mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reference / Receipt #</label>
             <input
               type="text"
-              className="form-control"
+              className="form-control w-full"
               value={formData.reference}
               onChange={(e) => setFormData({ ...formData, reference: e.target.value })}
               placeholder="Invoice or receipt number"
             />
           </div>
-          <div className="form-group">
-            <label>Description</label>
+          <div className="form-group mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
-              className="form-control"
+              className="form-control w-full"
               rows="3"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Additional details..."
             />
           </div>
-          <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+          <div className="form-group mb-6">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={formData.isRecurring}
                 onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
+                className="rounded text-indigo-600 focus:ring-indigo-500"
               />
-              Recurring Expense
+              <span className="text-sm text-gray-700">Recurring Expense</span>
             </label>
           </div>
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <div className="flex justify-end gap-3">
             <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={createMutation.isPending || updateMutation.isPending}>
               {createMutation.isPending || updateMutation.isPending ? 'Saving...' : editingExpense ? 'Update' : 'Create'}
@@ -458,3 +546,4 @@ export default function Expenses() {
     </div>
   );
 }
+

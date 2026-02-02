@@ -9,7 +9,8 @@ import {
   FaChevronUp,
   FaMoneyBillWave,
   FaSearch,
-  FaFileInvoice
+  FaFileInvoice,
+  FaDownload
 } from 'react-icons/fa';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -134,6 +135,40 @@ export default function UserExpensesReport() {
     return filteredData.reduce((acc, curr) => acc + curr.totalAmount, 0);
   }, [filteredData]);
 
+  const exportToCSV = () => {
+    if (!filteredData.length) return;
+    
+    // CSV Header
+    const headers = ["Utilisateur", "Date", "Fournisseur", "Description", "Montant Total", "Montant Payé"];
+    
+     // Helper to escape quotes
+    const escape = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
+
+    // Flatten data
+    const rows = filteredData.flatMap(group => 
+       group.transactions.map(tx => [
+         escape(group.name),
+         new Date(tx.date).toLocaleDateString(),
+         escape(tx.supplierName),
+         escape(tx.title + (tx.productRef ? ` - ${tx.productRef}` : '')),
+         tx.amount,
+         tx.paidAmount
+       ])
+    );
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + headers.join(",") + "\n"
+        + rows.map(e => e.join(",")).join("\n");
+        
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `rapport_utilisateurs_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen font-sans text-slate-800">
       
@@ -197,6 +232,14 @@ export default function UserExpensesReport() {
             className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
+
+        <button 
+          onClick={exportToCSV}
+          className="flex items-center gap-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors font-medium border border-indigo-200"
+        >
+          <FaDownload size={14} />
+          <span>Exporter</span>
+        </button>
       </div>
 
       {/* Main Content */}

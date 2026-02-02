@@ -13,7 +13,8 @@ import {
   FaExclamationCircle,
   FaHistory,
   FaPhone,
-  FaEnvelope
+  FaEnvelope,
+  FaDownload
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
@@ -253,6 +254,40 @@ export default function SupplierExpenses() {
     setExpandedId(expandedId === id ? null : id);
   };
 
+  const exportToCSV = () => {
+    if (!filteredSuppliers.length) return toast.warn("Aucune donnée à exporter");
+    
+    // CSV Header
+    const headers = ["Fournisseur", "Email", "Téléphone", "Total Acheté", "Total Payé", "Solde (Dette)", "Statut", "Dernière Transaction"];
+    
+    // Helper to escape quotes
+    const escape = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
+
+    // CSV Rows
+    const rows = filteredSuppliers.map(s => [
+      escape(s.fournisseur.name),
+      escape(s.fournisseur.email),
+      escape(s.fournisseur.phone),
+      s.totalAmount,
+      s.totalPaid,
+      s.details.balance,
+      s.details.status,
+      s.lastTransaction ? new Date(s.lastTransaction).toLocaleDateString() : '-'
+    ]);
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + headers.join(",") + "\n"
+        + rows.map(e => e.join(",")).join("\n");
+        
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `fournisseurs_finance_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Mutation
   const createMutation = useMutation({
     mutationFn: async (newData) => api.post('/expenses', newData),
@@ -393,6 +428,14 @@ export default function SupplierExpenses() {
             />
           </div>
           
+          <button 
+            onClick={exportToCSV}
+            className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-5 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all font-medium"
+          >
+            <FaDownload size={14} />
+            <span>Export</span>
+          </button>
+
           <button 
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 font-medium"
@@ -692,6 +735,20 @@ export default function SupplierExpenses() {
                  </div>
                )}
             </div>
+          </div>
+
+          <div className="mb-4">
+             <label className="block text-sm font-medium text-gray-700 mb-1">Effectué par</label>
+             <select
+               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+               value={formData.paidBy}
+               onChange={(e) => setFormData({ ...formData, paidBy: e.target.value })}
+             >
+               <option value="">(Moi-même)</option>
+               {usersList?.map(u => (
+                 <option key={u._id} value={u._id}>{u.name}</option>
+               ))}
+             </select>
           </div>
           
           <div>

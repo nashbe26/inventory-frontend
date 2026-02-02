@@ -7,6 +7,7 @@ import {
   FaPalette, 
   FaRuler, 
   FaWarehouse,
+  FaLayerGroup,
   FaBarcode,
   FaFileDownload,
   FaUser,
@@ -17,7 +18,8 @@ import {
   FaMoneyBillWave,
   FaHandHoldingUsd,
   FaTruck,
-  FaFileInvoice
+  FaFileInvoice,
+  FaWallet
 } from 'react-icons/fa'
 
 export default function Layout() {
@@ -83,6 +85,11 @@ export default function Layout() {
                 <FaUsers /> Expenses by User
               </NavLink>
             </li>
+            <li>
+              <NavLink to="/recettes" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaWallet /> Recettes
+              </NavLink>
+            </li>
      
             <li>
               <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''}>
@@ -108,6 +115,11 @@ export default function Layout() {
               <NavLink to="/rayons" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaWarehouse /> Rayons
               </NavLink>
+            </li>
+            <li>
+                 <NavLink to="/materials" className={({ isActive }) => isActive ? 'active' : ''}>
+                   <FaLayerGroup /> Matières
+                 </NavLink>
             </li>
             <li>
               <NavLink to="/fournisseurs" className={({ isActive }) => isActive ? 'active' : ''}>

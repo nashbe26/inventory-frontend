@@ -350,6 +350,11 @@ export default function SupplierExpenses() {
     });
   };
 
+  const selectedSupplierStats = useMemo(() => {
+    if (!formData.fournisseur || !suppliersData) return null;
+    return suppliersData.find(s => s.fournisseur._id === formData.fournisseur);
+  }, [formData.fournisseur, suppliersData]);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     
@@ -702,9 +707,13 @@ export default function SupplierExpenses() {
                    </div>
                  </div>
                ) : (
-                <div className="bg-yellow-50 p-3 rounded mb-2 border border-yellow-200">
-                    <p className="text-xs text-yellow-800">
-                      <strong>Note:</strong> Vous remboursez une dette existante. Ce montant sera déduit de la dette du fournisseur.
+                <div className={`p-4 rounded-lg border mb-4 ${selectedSupplierStats?.details?.debt > 0 ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Dette actuelle du fournisseur</p>
+                    <p className={`text-2xl font-bold font-mono ${selectedSupplierStats?.details?.debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {(selectedSupplierStats?.details?.debt || 0).toLocaleString()} <span className="text-sm text-gray-500 font-normal">DA</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ce règlement sera déduit de ce montant.
                     </p>
                 </div>
                )}

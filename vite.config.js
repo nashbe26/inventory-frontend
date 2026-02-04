@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3004,
     proxy: {
       '/api-inventory': {
-        target: 'http://localhost:3009',
+        target: 'https://tndeals.store',
         changeOrigin: true
       }
     }

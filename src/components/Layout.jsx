@@ -9,6 +9,7 @@ import {
   FaWarehouse,
   FaLayerGroup,
   FaBarcode,
+  FaHistory,
   FaFileDownload,
   FaUser,
   FaSignOutAlt,
@@ -54,6 +55,11 @@ export default function Layout() {
             <li>
               <NavLink to="/scanner" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaBarcode /> Scanner
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/history" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaHistory /> Scan History
               </NavLink>
             </li>
             <li>

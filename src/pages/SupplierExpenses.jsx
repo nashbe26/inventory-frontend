@@ -228,8 +228,11 @@ export default function SupplierExpenses() {
   });
 
   const { data: productsList } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => (await api.get('/products?limit=1000')).data.data
+    queryKey: ['products', 'all'],
+    queryFn: async () => {
+      const response = await api.get('/products?limit=1000');
+      return Array.isArray(response.data.data) ? response.data.data : [];
+    }
   });
 
   // Calculate Global Stats
@@ -620,7 +623,7 @@ export default function SupplierExpenses() {
                           className="w-full pl-3 pr-10 py-2 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         >
                           <option value="">-- Aucun --</option>
-                          {productsList?.map(p => (
+                          {Array.isArray(productsList) && productsList.map(p => (
                             <option key={p._id} value={p._id}> {p.name}</option>
                           ))}
                         </select>

@@ -106,14 +106,16 @@ const UserExpenseCard = ({ userGroup }) => {
 export default function UserExpensesReport() {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [expenseType, setExpenseType] = useState('all'); // 'all', 'supplier', 'general'
 
   // Fetch Grouped Data
   const { data: reportData, isLoading } = useQuery({
-    queryKey: ['expenses-by-user', dateRange],
+    queryKey: ['expenses-by-user', dateRange, expenseType],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (dateRange.start) params.append('startDate', dateRange.start);
       if (dateRange.end) params.append('endDate', dateRange.end);
+      if (expenseType !== 'all') params.append('type', expenseType);
       
       const res = await api.get(`/expenses/stats/by-user?${params.toString()}`);
       return res.data.data;
@@ -193,6 +195,28 @@ export default function UserExpensesReport() {
       {/* Filters Toolbar */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
         
+        {/* Type Filter */}
+        <div className="flex bg-gray-100 rounded-lg p-1">
+            <button 
+              onClick={() => setExpenseType('all')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${expenseType === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Tous
+            </button>
+            <button 
+              onClick={() => setExpenseType('supplier')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${expenseType === 'supplier' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Fournisseurs
+            </button>
+            <button 
+              onClick={() => setExpenseType('general')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${expenseType === 'general' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Générales
+            </button>
+        </div>
+
         {/* Date Filter */}
         <div className="flex items-center gap-3 w-full md:w-auto">
            <FaCalendarAlt className="text-gray-400" />

@@ -14,6 +14,7 @@ import Fournisseurs from './pages/Fournisseurs'
 import Products from './pages/Products'
 import ProductDetails from './pages/ProductDetails'
 import BarcodeScanner from './pages/BarcodeScanner'
+import History from './pages/History'
 import BulkGeneration from './pages/BulkGeneration'
 import Orders from './pages/Orders'
 import Analytics from './pages/Analytics'
@@ -109,6 +110,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="profile" element={<Profile />} />
           <Route path="scanner" element={<BarcodeScanner />} />
+          <Route path="history" element={<History />} />
 
           <Route path="categories" element={<Categories />} />
           <Route path="colors" element={<Colors />} />

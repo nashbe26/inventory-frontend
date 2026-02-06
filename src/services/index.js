@@ -42,7 +42,8 @@ export const productService = {
   getDochette: (id) => `/api-inventory/products/${id}/dochette`,
   // Add methods to fetch the blobs directly (with Auth header)
   fetchBarcode: (id) => api.get(`/products/${id}/barcode`, { responseType: 'blob' }),
-  fetchDochette: (id) => api.get(`/products/${id}/dochette`, { responseType: 'blob' })
+  fetchDochette: (id) => api.get(`/products/${id}/dochette`, { responseType: 'blob' }),
+  fetchCustomDochette: (id, items) => api.post(`/products/${id}/dochette-custom`, { items }, { responseType: 'blob' })
 };
 
 export const fournisseurService = {

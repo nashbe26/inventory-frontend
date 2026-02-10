@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaFileAlt, FaPrint } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import Modal from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
+import { QRCodeCanvas } from 'qrcode.react';
 
 const statuses = ['En Attente', 'Confirmé', 'Préparé', 'Expédié', 'Livré', 'Annulé'];
 
@@ -47,6 +48,8 @@ export default function Orders() {
   const [shipping, setShipping] = useState(8);
   const [productSearch, setProductSearch] = useState('');
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [isBordereauModalOpen, setIsBordereauModalOpen] = useState(false);
+  const [selectedDeliveryMan, setSelectedDeliveryMan] = useState('');
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -89,6 +92,19 @@ export default function Orders() {
       const res = await api.get('/products');
       return res.data;
     }
+  });
+
+  const { data: deliveryMenData } = useQuery({
+    queryKey: ['deliveryMen'],
+    queryFn: async () => {
+        // Fetch users with delivery_man role. Assuming we have an endpoint or filtering in list
+        // Since we don't have distinct endpoint validation for this, using analytics endpoint or generic users
+        // Let's rely on internal delivery analytics endpoint which returns delivery men list effectively
+        const res = await api.get('/internal-delivery/analytics');
+        // Extract users from stats
+        return res.data.map(stat => stat.user);
+    },
+    enabled: isBordereauModalOpen // Only fetch when modal opens
   });
 
   const orders = ordersData?.data || [];
@@ -235,6 +251,51 @@ export default function Orders() {
     }
   });
 
+  const createBordereauMutation = useMutation({
+    mutationFn: async () => {
+        const orderIds = Array.from(selectedOrderIds);
+        const payload = { 
+            orderIds,
+            // Only include deliveryManId if one is selected, otherwise send null
+            deliveryManId: selectedDeliveryMan || null 
+        };
+        const res = await api.post('/bordereaux', payload);
+        return res.data;
+    },
+    onSuccess: (data) => {
+        setIsBordereauModalOpen(false);
+        setSelectedOrderIds(new Set());
+        toast.success(`Bordereau ${data.data.code} created!`);
+        // Trigger download
+        window.open(`${api.defaults.baseURL}/bordereaux/${data.data._id}/pdf`, '_blank');
+        queryClient.invalidateQueries(['orders']);
+    },
+    onError: (error) => {
+        toast.error(error.response?.data?.message || 'Failed to create bordereau');
+    }
+  });
+
+  const printOrdersMutation = useMutation({
+    mutationFn: async (ids) => {
+        const res = await api.post('/orders/print', { orderIds: ids }, { responseType: 'blob' });
+        return res.data;
+    },
+    onSuccess: (blob) => {
+        const url = window.URL.createObjectURL(new Blob([blob]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `orders-print-${Date.now()}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast.success('Orders printed successfully');
+    },
+    onError: (error) => {
+        console.error(error);
+        toast.error('Failed to print orders');
+    }
+  });
+
   const addItemToOrder = (product, variant) => {
     const itemKey = variant ? `${product._id}-${variant._id}` : product._id;
     const existingItem = orderItems.find(item => item.itemKey === itemKey);
@@ -340,6 +401,16 @@ export default function Orders() {
                     }}>
                         <FaTruck /> Send Bulk ({selectedOrderIds.size})
                     </button>
+                    {(user.role === 'admin' || user.role === 'manager') && (
+                        <>
+                           <button className="btn btn-secondary" onClick={() => printOrdersMutation.mutate(Array.from(selectedOrderIds))} disabled={printOrdersMutation.isPending}>
+                                <FaPrint /> {printOrdersMutation.isPending ? 'Printing...' : `Print Invoices (${selectedOrderIds.size})`}
+                           </button>
+                           <button className="btn btn-secondary" onClick={() => setIsBordereauModalOpen(true)}>
+                                <FaFileAlt /> Create Bordereau ({selectedOrderIds.size})
+                           </button>
+                        </>
+                    )}
                     <button className="btn btn-secondary" onClick={() => requestPickupMutation.mutate(Array.from(selectedOrderIds))}>
                         <FaFileDownload /> Request Pickup ({selectedOrderIds.size})
                     </button>
@@ -515,9 +586,18 @@ export default function Orders() {
                         className="btn btn-sm btn-primary"
                         onClick={() => { setSelectedOrder(order); setIsViewModalOpen(true); }}
                         style={{ marginRight: '5px' }}
-                        title="View Details"
+                        title="View Details & QR"
                       >
                         <FaEye />
+                      </button>
+
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => { setSelectedOrder(order); setIsViewModalOpen(true); }}
+                        style={{ marginRight: '5px' }}
+                        title="Show Scan QR"
+                      >
+                        <FaQrcode />
                       </button>
 
                       {(user.role === 'admin' || user.role === 'manager') && (
@@ -845,6 +925,40 @@ export default function Orders() {
         </form>
       </Modal>
 
+      <Modal isOpen={isBordereauModalOpen} onClose={() => setIsBordereauModalOpen(false)} title="Generate Bordereau">
+        <div className="p-4">
+            <h3 className="text-lg font-bold mb-4">Select Delivery Man (Optional)</h3>
+            
+            <div className="form-group mb-4">
+                <label className="block text-gray-700">Delivery Agent</label>
+                <select 
+                    className="form-control"
+                    value={selectedDeliveryMan}
+                    onChange={(e) => setSelectedDeliveryMan(e.target.value)}
+                >
+                    <option value="">-- Unassigned (Print for Later Scan) --</option>
+                    {deliveryMenData?.map(dm => (
+                        <option key={dm._id} value={dm._id}>{dm.name}</option>
+                    ))}
+                </select>
+                <small className="text-gray-500">Leave empty to create a manifest that is claimed via scanning.</small>
+            </div>
+
+            <div className="bg-gray-50 p-3 rounded mb-4">
+                <p><strong>Selected Orders:</strong> {selectedOrderIds.size}</p>
+                <p className="text-sm text-gray-500">This will generate a PDF manifest.</p>
+            </div>
+
+            <button 
+                className="btn btn-primary w-full"
+                disabled={createBordereauMutation.isPending}
+                onClick={() => createBordereauMutation.mutate()}
+            >
+                {createBordereauMutation.isPending ? 'Generating...' : 'Generate & Download PDF'}
+            </button>
+        </div>
+      </Modal>
+
       <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title={`Order ${selectedOrder?.orderNumber || ''}`}>
         {selectedOrder && (
           <div>
@@ -865,6 +979,18 @@ export default function Orders() {
             {selectedOrder.notes && <h4 style={{ marginTop: '15px' }}>Notes</h4>}
             {selectedOrder.notes && <p>{selectedOrder.notes}</p>}
             
+            <div style={{ marginTop: '20px', padding: '15px', background: '#f8fafc', borderRadius: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <h4 style={{marginTop: 0, marginBottom: '10px'}}>Internal Delivery QR</h4>
+                <QRCodeCanvas 
+                    value={selectedOrder.orderNumber} 
+                    size={128}
+                    level={"H"}
+                    includeMargin={true}
+                />
+                <p style={{marginTop: '5px', fontSize: '0.9em', color: '#666'}}>Scan this to assign to Delivery Man</p>
+                <p className="font-mono font-bold mt-1 text-lg">{selectedOrder.orderNumber}</p>
+            </div>
+
             {selectedOrder.deliveryBarcode && (
                 <div style={{ marginTop: '15px', padding: '10px', background: '#e3f2fd', borderRadius: '4px' }}>
                     <h4 style={{marginTop: 0}}>Delivery Info</h4>

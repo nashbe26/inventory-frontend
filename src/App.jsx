@@ -14,6 +14,7 @@ import Fournisseurs from './pages/Fournisseurs'
 import Products from './pages/Products'
 import ProductDetails from './pages/ProductDetails'
 import BarcodeScanner from './pages/BarcodeScanner'
+import ReturnScanner from './pages/ReturnScanner'
 import History from './pages/History'
 import BulkGeneration from './pages/BulkGeneration'
 import Orders from './pages/Orders'
@@ -27,6 +28,16 @@ import OrganizationSetup from './pages/OrganizationSetup'
 import OrganizationManagement from './pages/OrganizationManagement'
 import AcceptInvitation from './pages/AcceptInvitation'
 import Pickups from './pages/Pickups'
+import DeliveryDashboard from './pages/DeliveryDashboard'
+import DeliveryHistory from './pages/DeliveryHistory'
+import DeliveryPerformance from './pages/DeliveryPerformance'
+import DeliveryScan from './pages/DeliveryScan'
+import DeliveryDeposits from './pages/DeliveryDeposits'
+import AdminDeliveryFinance from './pages/AdminDeliveryFinance'
+import DeliveryTeam from './pages/DeliveryTeam'
+import Bordereaux from './pages/Bordereaux'
+import ClaimOrder from './pages/ClaimOrder'
+import ClaimBordereau from './pages/ClaimBordereau'
 import { useEffect } from 'react'
 import { io } from 'socket.io-client'
 import { toast, ToastContainer } from 'react-toastify'
@@ -41,7 +52,7 @@ const SocketManager = () => {
 
         // Initialize Socket
         // Adjust URL for production/dev
-        const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000'); 
+        const newSocket = io(import.meta.env.VITE_API_URL || 'https://tndeals.store'); 
 
         newSocket.on('connect', () => {
             console.log('Socket Connected');
@@ -110,6 +121,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="profile" element={<Profile />} />
           <Route path="scanner" element={<BarcodeScanner />} />
+          <Route path="scanner-return" element={<ReturnScanner />} />
           <Route path="history" element={<History />} />
 
           <Route path="categories" element={<Categories />} />
@@ -128,6 +140,17 @@ function App() {
           <Route path="user-expenses-report" element={<UserExpensesReport />} />
           <Route path="recettes" element={<Recette />} />
           <Route path="organization" element={<OrganizationManagement />} />
+          <Route path="delivery-dashboard" element={<DeliveryDashboard />} />
+          <Route path="delivery-history" element={<DeliveryHistory />} />
+          <Route path="delivery-performance" element={<DeliveryPerformance />} />
+          <Route path="delivery-deposits" element={<DeliveryDeposits />} />
+          <Route path="delivery-finance-admin" element={<AdminDeliveryFinance />} />
+          <Route path="delivery-analytics" element={<DeliveryTeam />} />
+          <Route path="delivery-scan" element={<DeliveryScan />} />
+          <Route path="claim-order/:id" element={<ClaimOrder />} />
+          <Route path="claim-bordereau/:code" element={<ClaimBordereau />} />
+          <Route path="delivery-team" element={<DeliveryTeam />} />
+          <Route path="bordereaux" element={<Bordereaux />} />
         </Route>
 
         {/* Catch all - redirect to home */}

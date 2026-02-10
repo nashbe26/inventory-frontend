@@ -32,9 +32,13 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await login(formData.email, formData.password);
+      const userData = await login(formData.email, formData.password);
       toast.success('Login successful!');
-      navigate('/');
+      if (userData.user.role === 'delivery_man') {
+        navigate('/delivery-dashboard');
+      } else {
+        navigate('/');
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Login failed');
     } finally {

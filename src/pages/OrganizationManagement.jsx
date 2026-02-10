@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { organizationAPI } from '../services/api';
 import { FiUsers, FiMail, FiTrash2, FiUserPlus, FiCopy, FiCheck } from 'react-icons/fi';
+import { FaTruck } from 'react-icons/fa';
 
 const OrganizationManagement = () => {
   const navigate = useNavigate();
@@ -149,6 +150,8 @@ const OrganizationManagement = () => {
         return 'bg-blue-100 text-blue-800';
       case 'manager':
         return 'bg-green-100 text-green-800';
+      case 'delivery_man':
+        return 'bg-yellow-100 text-yellow-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -164,6 +167,8 @@ const OrganizationManagement = () => {
         return 'Manager';
       case 'staff':
         return 'Employé';
+      case 'delivery_man':
+        return 'Livreur';
       default:
         return role;
     }
@@ -176,8 +181,8 @@ const OrganizationManagement = () => {
   };
 
   const availableRoles = (currentUserRole) => {
-    if (currentUserRole === 'owner') return ['admin', 'manager', 'staff'];
-    if (currentUserRole === 'admin') return ['manager', 'staff'];
+    if (currentUserRole === 'owner') return ['admin', 'manager', 'staff', 'delivery_man'];
+    if (currentUserRole === 'admin') return ['manager', 'staff', 'delivery_man'];
     return [];
   };
 
@@ -284,6 +289,7 @@ const OrganizationManagement = () => {
                                             <div className="ml-4">
                                             <div className="text-sm font-semibold text-gray-900">{member.user?.name || 'N/A'}</div>
                                             <div className="text-sm text-gray-500">{member.user?.email || 'N/A'}</div>
+                                            {member.role === 'delivery_man' && <div className="text-xs text-yellow-600 mt-1 flex items-center gap-1"><FaTruck size={10} /> Livraison</div>}
                                             </div>
                                         </div>
                                     </td>
@@ -426,8 +432,9 @@ const OrganizationManagement = () => {
                   onChange={(e) => setInviteData({ ...inviteData, role: e.target.value })}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 >
-                  <option value="staff">Employé - Accès de base</option>
+                  <option value="staff">Employé - Accès de base</option>      
                   <option value="manager">Manager - Gestion d'équipe</option>
+                  <option value="delivery_man">Livreur - Applications de livraison</option>
                   <option value="admin">Administrateur - Accès complet</option>
                 </select>
               </div>

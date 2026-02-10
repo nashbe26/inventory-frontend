@@ -34,7 +34,7 @@ const Login = () => {
     try {
       const userData = await login(formData.email, formData.password);
       toast.success('Login successful!');
-      if (userData.user.role === 'delivery_man') {
+      if (userData.role === 'delivery_man') {
         navigate('/delivery-dashboard');
       } else {
         navigate('/');

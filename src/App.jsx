@@ -52,7 +52,7 @@ const SocketManager = () => {
 
         // Initialize Socket
         // Adjust URL for production/dev
-        const newSocket = io(import.meta.env.VITE_API_URL || 'https://tndeals.store'); 
+        const newSocket = io(import.meta.env.VITE_API_URL || 'https://tndeals'); 
 
         newSocket.on('connect', () => {
             console.log('Socket Connected');

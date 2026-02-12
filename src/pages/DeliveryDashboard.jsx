@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { FaBoxOpen, FaCheckCircle, FaQrcode, FaMapMarkerAlt, FaPhone, FaTimesCircle } from 'react-icons/fa';
+import { FaBoxOpen, FaCheckCircle, FaQrcode, FaMapMarkerAlt, FaPhone, FaTimesCircle, FaUser, FaClock } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 export default function DeliveryDashboard() {
@@ -82,75 +82,69 @@ export default function DeliveryDashboard() {
       ) : (
         <div className="space-y-4">
           {activeTab === 'my-deliveries' && (
-             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-               {myDeliveries.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">No active deliveries. Pick some up!</div>
-               ) : (
-                  <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                          <thead className="bg-gray-50 border-b border-gray-100">
-                              <tr>
-                                  <th className="p-4 font-semibold text-gray-600">Reference</th>
-                                  <th className="p-4 font-semibold text-gray-600">Customer</th>
-                                  <th className="p-4 font-semibold text-gray-600">Location</th>
-                                  <th className="p-4 font-semibold text-gray-600">Payment</th>
-                                  <th className="p-4 font-semibold text-gray-600">Amount</th>
-                                  <th className="p-4 font-semibold text-gray-600">Status</th>
-                                  <th className="p-4 font-semibold text-gray-600 text-right">Actions</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {myDeliveries.map(order => (
-                              <tr key={order._id} className="hover:bg-gray-50">
-                                  <td className="p-4 font-bold text-indigo-700">
-                                      #{order.orderNumber}
-                                  </td>
-                                  <td className="p-4">
-                                      <div className="text-sm font-medium text-gray-900">{order.customer.name || 'Customer'}</div>
-                                      <a href={`tel:${order.customer.telephone}`} className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
-                                          <FaPhone size={10} /> {order.customer.telephone}
-                                      </a>
-                                  </td>
-                                  <td className="p-4 text-sm text-gray-600">
-                                      <div>{order.customer.ville}, {order.customer.gouvernerat}</div>
-                                      <div className="text-xs text-gray-400">{order.customer.adresse}</div>
-                                  </td>
-                                  <td className="p-4 text-sm text-gray-600">{order.paymentMethod}</td>
-                                  <td className="p-4 font-bold text-gray-800">{order.total} DT</td>
-                                  <td className="p-4">
-                                      <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">{order.status}</span>
-                                  </td>
-                                  <td className="p-4 text-right">
-                                      <div className="flex justify-end gap-2">
-                                          <button 
-                                              onClick={() => markDelivered(order._id)} 
-                                              className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-1 text-sm transition-colors"
-                                              title="Mark as Delivered"
-                                          >
-                                              <FaCheckCircle /> Deliver
-                                          </button>
-                                          <button 
-                                              onClick={() => updateStatus(order._id, 'NRP')} 
-                                              className="px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 text-sm transition-colors" 
-                                              title="NRP / Return"
-                                          >
-                                              <FaTimesCircle />
-                                          </button>
-                                          <button 
-                                              onClick={() => updateStatus(order._id, 'Retour')} 
-                                              className="px-3 py-1 bg-orange-100 text-orange-600 rounded hover:bg-orange-200 text-sm transition-colors" 
-                                              title="Return"
-                                          >
-                                              Retour
-                                          </button>
-                                      </div>
-                                  </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                      </table>
-                  </div>
-               )}
+             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+               {myDeliveries.length === 0 && <p className="text-gray-500 col-span-3">No active deliveries. Pick some up!</p>}
+               {myDeliveries.map(order => (
+                 <div key={order._id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition-shadow">
+                    <div>
+                        <div className="flex justify-between items-start mb-3">
+                            <div>
+                                <span className="font-bold text-lg text-indigo-700 block">#{order.orderNumber}</span>
+                                <span className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</span>
+                            </div>
+                            <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full font-medium">{order.status}</span>
+                        </div>
+                        
+                        <div className="space-y-3 mb-4">
+                            <div className="flex items-start gap-3">
+                                <div className="mt-1 text-gray-400"><FaUser /></div>
+                                <div>
+                                    <p className="font-medium text-gray-900">{order.customer.name || 'Unknown Customer'}</p>
+                                    <a href={`tel:${order.customer.telephone}`} className="text-sm text-indigo-600 hover:underline flex items-center gap-1">
+                                        <FaPhone size={12} /> {order.customer.telephone}
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-3">
+                                <div className="mt-1 text-gray-400"><FaMapMarkerAlt /></div>
+                                <div>
+                                    <p className="text-sm text-gray-800 font-medium">{order.customer.ville}, {order.customer.gouvernerat}</p>
+                                    <p className="text-xs text-gray-500">{order.customer.adresse}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100 mt-2">
+                                <span className="text-sm text-gray-500">{order.paymentMethod}</span>
+                                <span className="font-bold text-gray-800 text-lg">{order.total} DT</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 mt-2 pt-4 border-t border-gray-100">
+                        <button 
+                            onClick={() => markDelivered(order._id)} 
+                            className="col-span-2 bg-green-600 text-white py-2.5 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium transition-colors"
+                        >
+                            <FaCheckCircle /> delivered
+                        </button>
+                        <button 
+                            onClick={() => updateStatus(order._id, 'NRP')} 
+                            className="bg-orange-100 text-orange-700 py-2 rounded-lg hover:bg-orange-200 flex items-center justify-center gap-2 text-sm font-medium transition-colors"
+                            title="Not Responding / Postpone"
+                        >
+                            <FaClock /> Decline
+                        </button>
+                        <button 
+                            onClick={() => updateStatus(order._id, 'Retour')} 
+                            className="bg-red-100 text-red-700 py-2 rounded-lg hover:bg-red-200 flex items-center justify-center gap-2 text-sm font-medium transition-colors" 
+                            title="Return / Cancelled"
+                        >
+                            <FaTimesCircle /> Reject
+                        </button>
+                    </div>
+                 </div>
+               ))}
              </div>
           )}
         </div>

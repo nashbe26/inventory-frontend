@@ -65,9 +65,17 @@ export default function Dashboard() {
         </div>
 
         <div className="stat-card">
-          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Value</h3>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Value (Selling)</h3>
           <div className="stat-value" style={{ color: 'var(--primary-color)' }}>
             {stats?.totalValue?.toFixed(2) || '0.00'} dt
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Cost (Buying)</h3>
+          <div className="stat-value" style={{ color: 'var(--warning-color)' }}>
+            <FaDollarSign style={{ display: 'inline', marginRight: '10px' }} />
+            {stats?.totalBuyingValue?.toFixed(2) || '0.00'} dt
           </div>
         </div>
       </div>

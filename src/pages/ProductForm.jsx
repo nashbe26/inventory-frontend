@@ -11,6 +11,8 @@ export default function ProductForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isEditing = !!id;
+  
+  console.log('ProductForm Render:', { id, isEditing });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -43,25 +45,29 @@ export default function ProductForm() {
   const { data: sizes } = useQuery({ queryKey: ['sizes'], queryFn: async () => (await sizeService.getAll()).data.data });
 
   // Fetch product data if editing
-  useQuery({
+  const { data: productData, isSuccess } = useQuery({
     queryKey: ['product', id],
     queryFn: async () => {
-      const response = await productService.getById(id);
-      return response.data;
+      console.log('Fetching product data for ID:', id);
+      const response = await productService.getOne(id);
+      return response.data.data;
     },
-    enabled: isEditing,
-    onSuccess: (data) => {
+    enabled: isEditing
+  });
+
+  useEffect(() => {
+    if (isSuccess && productData) {
       setFormData({
-        name: data.name,
-        categoryId: data.categoryId?._id || '',
-        rayonId: data.rayonId?._id || '',
-        price: data.price || '',
-        buyingPrice: data.buyingPrice || '',
-        description: data.description || '',
-        lowStockThreshold: data.lowStockThreshold || 10,
-        fournisseurId: data.fournisseurId?._id || '',
-        materialId: data.materialId?._id || '',
-        variants: data.variants.map(v => ({
+        name: productData.name,
+        categoryId: productData.categoryId?._id || '',
+        rayonId: productData.rayonId?._id || '',
+        price: productData.price || '',
+        buyingPrice: productData.buyingPrice || '',
+        description: productData.description || '',
+        lowStockThreshold: productData.lowStockThreshold || 10,
+        fournisseurId: productData.fournisseurId?._id || '',
+        materialId: productData.materialId?._id || '',
+        variants: productData.variants.map(v => ({
              colorId: v.colorId?._id || v.colorId,
              sizeId: v.sizeId?._id || v.sizeId,
              quantity: v.quantity,
@@ -71,7 +77,7 @@ export default function ProductForm() {
         }))
       });
     }
-  });
+  }, [isSuccess, productData]);
 
   const mutation = useMutation({
     mutationFn: (data) => isEditing ? productService.update(id, data) : productService.create(data),

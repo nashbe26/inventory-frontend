@@ -114,7 +114,11 @@ export default function Orders() {
     const matchesSearch = 
         order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.customer?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customer?.telephone?.includes(searchTerm);
+        order.customer?.telephone?.includes(searchTerm) ||
+        order.items?.some(item => 
+          item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
     return matchesSearch;
   });
 
@@ -494,16 +498,17 @@ export default function Orders() {
                     <button
                         key={group.value}
                         onClick={() => setStatusFilter(group.value)}
+                        className={`status-tab ${statusFilter === group.value ? 'active' : ''}`}
                         style={{
-                            padding: '8px 16px',
-                            borderRadius: '20px',
-                            border: 'none',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '9999px',
+                            border: statusFilter === group.value ? '1px solid var(--primary-color)' : '1px solid transparent',
                             cursor: 'pointer',
-                            fontSize: '0.9rem',
-                            fontWeight: statusFilter === group.value ? '600' : '400',
-                            backgroundColor: statusFilter === group.value ? 'var(--primary-color)' : '#f3f4f6',
-                            color: statusFilter === group.value ? 'white' : '#4b5563',
-                            transition: 'all 0.2s',
+                            fontSize: '0.875rem',
+                            fontWeight: statusFilter === group.value ? '600' : '500',
+                            backgroundColor: statusFilter === group.value ? 'var(--primary-color)' : 'var(--bg-secondary)',
+                            color: statusFilter === group.value ? 'white' : 'var(--text-secondary)',
+                            transition: 'all 0.2s ease',
                             whiteSpace: 'nowrap'
                         }}
                     >
@@ -526,7 +531,7 @@ export default function Orders() {
                         onChange={toggleAllSelection}
                     />
                 </th>
-                <th>Order #</th>
+                <th>Products</th>
                 <th>Customer</th>
                 <th>Items</th>
                 <th>Total</th>
@@ -549,7 +554,18 @@ export default function Orders() {
                             onChange={() => toggleOrderSelection(order._id)}
                         />
                     </td>
-                    <td><strong>{order.orderNumber}</strong></td>
+                    <td>
+                        <div style={{ maxWidth: '300px' }}>
+                            {order.items?.map((item, idx) => (
+                                <div key={idx} style={{ fontSize: '0.85rem', marginBottom: '2px' }}>
+                                    <strong>{item.productName}</strong>
+                                    {item.colorName && <span className="text-gray-600"> - {item.colorName}</span>}
+                                    {item.sizeLabel && <span className="text-gray-600"> - {item.sizeLabel}</span>}
+                                    {item.quantity > 1 && <span className="badge badge-sm badge-secondary" style={{ marginLeft: '5px' }}>x{item.quantity}</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </td>
                     <td>{order.customer?.nom || 'Walk-in Customer'}</td>
                     <td>{order.items?.length || 0} items</td>
                     <td><strong>{order.total?.toFixed(2)} dt</strong></td>

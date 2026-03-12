@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaFileAlt, FaPrint } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaFileAlt, FaPrint, FaEdit } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import Modal from '../components/Modal';
@@ -33,14 +33,22 @@ const getStatusBadge = (status) => {
     }
 };
 
+const tunisiaGovernorates = [
+  'Ariana', 'Béja', 'Ben Arous', 'Bizerte', 'Gabès', 'Gafsa', 'Jendouba', 'Kairouan',
+  'Kasserine', 'Kébili', 'Le Kef', 'Mahdia', 'Le Manouba', 'Médenine', 'Monastir', 'Nabeul',
+  'Sfax', 'Sidi Bouzid', 'Siliana', 'Sousse', 'Tataouine', 'Tozeur', 'Tunis', 'Zaghouan'
+];
+
 export default function Orders() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [productFilter, setProductFilter] = useState('');
   const [orderItems, setOrderItems] = useState([]);
   const [customer, setCustomer] = useState({ nom: '', telephone: '', adresse: '', gouvernerat: '', ville: '', telephone2: '' });
   const [source, setSource] = useState('Direct');
@@ -119,7 +127,13 @@ export default function Orders() {
           item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           item.sku?.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    return matchesSearch;
+        
+    const matchesProduct = productFilter === '' || order.items?.some(item => {
+        const pId = item.productId?._id || item.productId || item.product;
+        return pId?.toString() === productFilter;
+    });
+
+    return matchesSearch && matchesProduct;
   });
 
   const filteredProducts = productSearch
@@ -129,8 +143,36 @@ export default function Orders() {
       )
     : [];
 
+  const checkStockAvailability = (item) => {
+    if (!productsData?.data) return null;
+    
+    const pId = item.productId?._id || item.productId || item.product;
+    if (!pId) return null;
+
+    const product = productsData.data.find(p => p._id === pId.toString());
+    if (!product) return null;
+
+    if (product.variants && product.variants.length > 0) {
+        let variant = null;
+        if (item.variantId) {
+            const vId = item.variantId._id || item.variantId;
+            variant = product.variants.find(v => v._id === vId.toString());
+        }
+        if (!variant && item.sku) {
+            variant = product.variants.find(v => v.sku === item.sku);
+        }
+        if (variant) {
+            return variant.quantity >= item.quantity;
+        }
+    }
+
+    const availableStock = product.quantity !== undefined ? product.quantity : product.totalQuantity;
+    return availableStock >= item.quantity;
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
+    setEditingOrder(null);
     setOrderItems([]);
     setCustomer({ nom: '', telephone: '', adresse: '', gouvernerat: '', ville: '', telephone2: '' });
     setSource('Direct');
@@ -152,6 +194,22 @@ export default function Orders() {
     },
     onError: (error) => {
       toast.error(error.response?.data?.message || 'Failed to create order');
+    }
+  });
+
+  const updateOrderMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      const res = await api.patch(`/orders/${id}`, data);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['orders']);
+      queryClient.invalidateQueries(['products']);
+      toast.success(`Order ${data.data.orderNumber} updated successfully`);
+      closeModal();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to update order');
     }
   });
 
@@ -363,13 +421,37 @@ export default function Orders() {
     }
   };
 
+  const openEditModal = (order) => {
+    setEditingOrder(order);
+    setCustomer(order.customer || { nom: '', telephone: '', adresse: '', gouvernerat: '', ville: '', telephone2: '' });
+    setSource(order.source || 'Direct');
+    setNotes(order.notes || '');
+    setShipping(order.shipping || 8);
+    
+    // Map existing order items to the state format
+    const mappedItems = order.items.map(item => ({
+        itemKey: item.variantId ? `${item.productId?._id || item.productId}-${item.variantId}` : (item.productId?._id || item.productId),
+        productId: item.productId?._id || item.productId,
+        variantId: item.variantId,
+        productName: item.productName,
+        sku: item.sku,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        availableStock: 9999 // We don't have exact available stock without finding the product again, so we assume a large number for editing existing qty, or it can be limited by product stock later
+    }));
+    
+    setOrderItems(mappedItems);
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (orderItems.length === 0) {
       toast.error('Please add at least one item');
       return;
     }
-    createMutation.mutate({
+    
+    const orderData = {
         customer,
         items: orderItems.map(item => ({
             product: item.productId,
@@ -380,7 +462,13 @@ export default function Orders() {
         shipping,
         source,
         notes
-    });
+    };
+
+    if (editingOrder) {
+        updateOrderMutation.mutate({ id: editingOrder._id, data: orderData });
+    } else {
+        createMutation.mutate(orderData);
+    }
   };
 
   if (isLoading) return <div className="loading">Loading orders...</div>;
@@ -490,6 +578,21 @@ export default function Orders() {
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
+                  
+                  <div style={{ minWidth: '200px' }}>
+                      <select 
+                          className="form-control" 
+                          value={productFilter} 
+                          onChange={(e) => setProductFilter(e.target.value)}
+                      >
+                          <option value="">All Products</option>
+                          {productsData?.data?.map(product => (
+                              <option key={product._id} value={product._id}>
+                                  {product.name}
+                              </option>
+                          ))}
+                      </select>
+                  </div>
              </div>
 
              {/* Status Tabs */}
@@ -556,14 +659,25 @@ export default function Orders() {
                     </td>
                     <td>
                         <div style={{ maxWidth: '300px' }}>
-                            {order.items?.map((item, idx) => (
-                                <div key={idx} style={{ fontSize: '0.85rem', marginBottom: '2px' }}>
+                            {order.items?.map((item, idx) => {
+                                const isAvailable = checkStockAvailability(item);
+                                return (
+                                <div key={idx} style={{ fontSize: '0.85rem', marginBottom: '2px', display: 'flex', alignItems: 'center' }}>
                                     <strong>{item.productName}</strong>
-                                    {item.colorName && <span className="text-gray-600"> - {item.colorName}</span>}
-                                    {item.sizeLabel && <span className="text-gray-600"> - {item.sizeLabel}</span>}
+                                    {item.colorName && <span className="text-gray-600 ml-1">- {item.colorName}</span>}
+                                    {item.sizeLabel && <span className="text-gray-600 ml-1">- {item.sizeLabel}</span>}
                                     {item.quantity > 1 && <span className="badge badge-sm badge-secondary" style={{ marginLeft: '5px' }}>x{item.quantity}</span>}
+                                    {isAvailable !== null && (
+                                        <span style={{ marginLeft: '5px', display: 'inline-flex', alignItems: 'center' }}>
+                                            {isAvailable ? (
+                                                <FaCheck className="text-green-500" title="In Stock" />
+                                            ) : (
+                                                <FaTimes className="text-red-500" title="Out of Stock" />
+                                            )}
+                                        </span>
+                                    )}
                                 </div>
-                            ))}
+                            )})}
                         </div>
                     </td>
                     <td>{order.customer?.nom || 'Walk-in Customer'}</td>
@@ -597,7 +711,17 @@ export default function Orders() {
                         )}
                     </td>
                     <td>{new Date(order.createdAt).toLocaleDateString()}</td>
-                    <td>
+                    <td style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
+                      {order.items && order.items.length > 0 && order.items.every(item => checkStockAvailability(item)) ? (
+                          <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
+                              <FaCheck className="text-green-500" title="All Items In Stock" size={20} />
+                          </span>
+                      ) : (
+                          <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
+                              <FaTimes className="text-red-500" title="Some Items Out of Stock" size={20} />
+                          </span>
+                      )}
+
                       <button
                         className="btn btn-sm btn-primary"
                         onClick={() => { setSelectedOrder(order); setIsViewModalOpen(true); }}
@@ -657,6 +781,15 @@ export default function Orders() {
                                     )}
                                   </>
                               )}
+
+                              <button
+                                className="btn btn-sm btn-info"
+                                onClick={() => openEditModal(order)}
+                                style={{ marginRight: '5px' }}
+                                title="Edit Order"
+                              >
+                                <FaEdit />
+                              </button>
 
                               <button
                                 className="btn btn-sm btn-danger"
@@ -763,7 +896,7 @@ export default function Orders() {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={closeModal} title="Create New Order">
+      <Modal isOpen={isModalOpen} onClose={closeModal} title={editingOrder ? `Edit Order ${editingOrder.orderNumber}` : "Create New Order"}>
         <form onSubmit={handleSubmit}>
           <div className="relative mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">Add Products</label>
@@ -849,7 +982,7 @@ export default function Orders() {
                         <td><strong>{item.productName}</strong><br /><small>{item.sku}</small></td>
                         <td>
                           <input
-                            type="number" min="1" max={item.availableStock} value={item.quantity}
+                            type="number" min="1" value={item.quantity}
                             onChange={(e) => updateItemQuantity(item.itemKey, e.target.value)}
                             className="form-control" style={{ width: '70px' }}
                           />
@@ -906,8 +1039,13 @@ export default function Orders() {
                 <option value="Autre">Autre</option>
               </select>
 
-              <input type="text" className="form-control" placeholder="Governorate" value={customer.gouvernerat}
-                onChange={(e) => setCustomer({ ...customer, gouvernerat: e.target.value })} />
+              <select className="form-control" value={customer.gouvernerat}
+                onChange={(e) => setCustomer({ ...customer, gouvernerat: e.target.value })}>
+                <option value="" disabled>Select Governorate</option>
+                {tunisiaGovernorates.map(gov => (
+                  <option key={gov} value={gov}>{gov}</option>
+                ))}
+              </select>
                 
               <input type="text" className="form-control" placeholder="City" value={customer.ville}
                 onChange={(e) => setCustomer({ ...customer, ville: e.target.value })} />
@@ -935,8 +1073,11 @@ export default function Orders() {
           </div>
 
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }}
-            disabled={orderItems.length === 0 || createMutation.isPending}>
-            {createMutation.isPending ? 'Creating...' : 'Create Order'}
+            disabled={orderItems.length === 0 || createMutation.isPending || updateOrderMutation.isPending}>
+            {editingOrder 
+              ? (updateOrderMutation.isPending ? 'Updating...' : 'Update Order') 
+              : (createMutation.isPending ? 'Creating...' : 'Create Order')
+            }
           </button>
         </form>
       </Modal>
@@ -1026,12 +1167,25 @@ export default function Orders() {
             )}
 
             <h4 style={{ marginTop: '15px' }}>Items</h4>
-            {selectedOrder.items?.map((item, idx) => (
+            {selectedOrder.items?.map((item, idx) => {
+              const isAvailable = checkStockAvailability(item);
+              return (
               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                <div><strong>{item.productName}</strong><br /><small>{item.quantity} x {item.unitPrice?.toFixed(2)} dt</small></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div><strong>{item.productName}</strong><br /><small>{item.quantity} x {item.unitPrice?.toFixed(2)} dt</small></div>
+                  {isAvailable !== null && (
+                      <span className="ml-2" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          {isAvailable ? (
+                              <FaCheck className="text-green-500" title="In Stock" />
+                          ) : (
+                              <FaTimes className="text-red-500" title="Out of Stock" />
+                          )}
+                      </span>
+                  )}
+                </div>
                 <strong>{item.totalPrice?.toFixed(2)} dt</strong>
               </div>
-            ))}
+            )})}
 
             <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '2px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>{selectedOrder.subtotal?.toFixed(2)} dt</span></div>

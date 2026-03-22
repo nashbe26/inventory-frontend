@@ -26,7 +26,8 @@ import {
   FaCogs,
   FaBars,
   FaTimes,
-  FaQrcode
+  FaQrcode,
+  FaShopify
 } from 'react-icons/fa'
 
 export default function Layout() {
@@ -300,6 +301,11 @@ export default function Layout() {
           {user?.role !== 'delivery_man' && (
             <NavLink to="/organization" className={({ isActive }) => isActive ? 'active' : ''}>
               <FaCogs /> Organization
+            </NavLink>
+          )}
+          {(user?.role === 'admin' || user?.role === 'manager') && (
+            <NavLink to="/shopify-settings" className={({ isActive }) => isActive ? 'active' : ''}>
+              <FaShopify /> Shopify
             </NavLink>
           )}
           <NavLink to="/profile" className={({ isActive }) => isActive ? 'active' : ''}>

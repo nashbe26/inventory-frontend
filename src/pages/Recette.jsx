@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaEdit, FaTrash, FaWallet, FaDownload, FaTruck, FaUser } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaWallet, FaDownload, FaTruck, FaUser, FaChartLine, FaArrowDown, FaArrowUp, FaMoneyCheckAlt } from 'react-icons/fa';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from 'react-toastify';
 import Modal from '../components/Modal';
@@ -49,8 +49,17 @@ export default function Recette() {
     }
   });
 
+  const { data: treasuryData } = useQuery({
+    queryKey: ['treasury-summary'],
+    queryFn: async () => {
+      const res = await api.get('/recettes/treasury/summary');
+      return res.data;
+    }
+  });
+
   const recipes = recetteData?.data || [];
   const totalAmount = recetteData?.totalAmount || 0;
+  const treasury = treasuryData?.data;
 
   // Prepare chart data
   const chartData = useMemo(() => {
@@ -132,8 +141,8 @@ export default function Recette() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Gestion des Recettes</h1>
-          <p className="text-gray-600">Suivi des encaissements journaliers</p>
+          <h1 className="text-3xl font-bold text-gray-800">Trésorerie & Recettes</h1>
+          <p className="text-gray-600">Vue globale des fonds injectés et des dépenses de l'entreprise</p>
         </div>
         <button
           onClick={() => openModal()}
@@ -143,15 +152,55 @@ export default function Recette() {
         </button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Global Treasury Analytics */}
+      {treasury && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-xl shadow-lg text-white">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-medium text-gray-300 uppercase tracking-wide">Solde Actuel</p>
+              <FaWallet className="text-gray-400 opacity-50" size={24} />
+            </div>
+            <h3 className="text-3xl font-bold">{(treasury.currentBalance || 0).toLocaleString('fr-FR')} <span className="text-lg font-normal text-gray-400">DA</span></h3>
+            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+              <FaChartLine /> Solde de trésorerie disponible
+            </p>
+          </div>
+          
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-green-100 text-green-600 rounded-lg"><FaArrowDown size={16}/></div>
+              <p className="text-sm text-gray-500 font-medium uppercase">Fonds Injectés (Recettes)</p>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-800">{(treasury.totalInflows || 0).toLocaleString('fr-FR')} DA</h3>
+          </div>
+          
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-red-100 text-red-600 rounded-lg"><FaArrowUp size={16}/></div>
+              <p className="text-sm text-gray-500 font-medium uppercase">Dépenses Générales</p>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-800">{(treasury.totalGeneralExpenses || 0).toLocaleString('fr-FR')} DA</h3>
+          </div>
+          
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FaMoneyCheckAlt size={16}/></div>
+              <p className="text-sm text-gray-500 font-medium uppercase">Paiements Fournisseurs</p>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-800">{(treasury.totalSupplierPayments || 0).toLocaleString('fr-FR')} DA</h3>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Recette Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-4">
             <div className="p-4 bg-green-100 text-green-600 rounded-full">
-              <FaWallet size={24} />
+              <FaArrowDown size={24} />
             </div>
             <div>
-              <p className="text-sm text-gray-500 font-medium uppercase">Total Période</p>
+              <p className="text-sm text-gray-500 font-medium uppercase">Total Injections (Période)</p>
               <h3 className="text-2xl font-bold text-gray-800">{totalAmount.toLocaleString('fr-FR')} DA</h3>
             </div>
           </div>

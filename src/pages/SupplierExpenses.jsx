@@ -6,7 +6,6 @@ import {
   FaMoneyBillWave, 
   FaExchangeAlt,
   FaChevronDown, 
-  FaChevronUp, 
   FaFileInvoiceDollar,
   FaHandHoldingUsd,
   FaCheckCircle,
@@ -14,7 +13,8 @@ import {
   FaHistory,
   FaPhone,
   FaEnvelope,
-  FaDownload
+  FaDownload,
+  FaTrash
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
@@ -65,7 +65,17 @@ const ProgressBar = ({ paid, total }) => {
 
 // --- History Table Component ---
 
-const SupplierHistory = ({ supplierId, onPay }) => {
+const SupplierHistory = ({ supplierId }) => {
+  const [historyTab, setHistoryTab] = useState('invoices');
+
+  const { data: supplierStats } = useQuery({
+    queryKey: ['supplier-stats', supplierId],
+    queryFn: async () => {
+      const res = await api.get(`/expenses/suppliers/${supplierId}/stats`);
+      return res.data.data;
+    }
+  });
+
   const { data: transactions, isLoading } = useQuery({
     queryKey: ['supplier-transactions', supplierId],
     queryFn: async () => {
@@ -85,27 +95,109 @@ const SupplierHistory = ({ supplierId, onPay }) => {
     );
   }
 
+  const invoiceTransactions = transactions.filter(tx => (tx.amount || 0) > 0);
+
+  const paymentTransactions = transactions
+    .flatMap((tx) => {
+      const fromPaymentHistory = (tx.paymentHistory || []).map((payment, idx) => ({
+        id: `${tx._id}-history-${idx}`,
+        date: payment.date,
+        amount: payment.amount,
+        method: payment.method || 'Cash',
+        note: payment.note,
+        paidByName: payment.paidBy?.name || 'Inconnu',
+        invoiceNumber: tx.invoiceNumber || null,
+        source: tx.invoiceNumber ? 'Facture' : 'Transaction'
+      }));
+
+      const directSettlement = (tx.amount || 0) === 0 && (tx.paidAmount || 0) > 0
+        ? [{
+            id: `${tx._id}-direct`,
+            date: tx.date,
+            amount: tx.paidAmount,
+            method: 'Direct',
+            note: tx.description || tx.title,
+            paidByName: tx.paidBy?.name || tx.createdBy?.name || 'Inconnu',
+            invoiceNumber: null,
+            source: 'Règlement'
+          }]
+        : [];
+
+      return [...fromPaymentHistory, ...directSettlement];
+    })
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
   return (
-    <div className="overflow-hidden rounded-lg mt-4 border border-gray-200">
+    <div className="space-y-4">
+      {supplierStats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="bg-white border border-gray-200 rounded-lg p-3">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Factures</p>
+            <p className="text-lg font-bold text-gray-800">{supplierStats.invoiceCount || 0}</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Impayées</p>
+            <p className="text-lg font-bold text-red-600">{supplierStats.unpaidInvoices || 0}</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Moyenne / Facture</p>
+            <p className="text-lg font-bold text-gray-800">{(supplierStats.averageInvoiceAmount || 0).toLocaleString('fr-FR')} DA</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3">
+            <p className="text-xs uppercase tracking-wide text-gray-500">Ce mois</p>
+            <p className="text-lg font-bold text-indigo-600">{(supplierStats.thisMonthInvoiced || 0).toLocaleString('fr-FR')} DA</p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex bg-gray-100 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setHistoryTab('invoices')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${historyTab === 'invoices' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
+        >
+          Factures
+        </button>
+        <button
+          onClick={() => setHistoryTab('payments')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${historyTab === 'payments' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
+        >
+          Paiements effectués
+        </button>
+      </div>
+
+      {historyTab === 'invoices' ? (
+        <div className="overflow-hidden rounded-lg mt-2 border border-gray-200">
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50">
           <tr>
              <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
+             <th className="px-4 py-3 text-left font-semibold text-gray-600">Facture</th>
              <th className="px-4 py-3 text-left font-semibold text-gray-600">Produit / Description</th>
              <th className="px-4 py-3 text-right font-semibold text-gray-600">Montant Total</th>
              <th className="px-4 py-3 text-right font-semibold text-gray-600">Reste à payer</th>
              <th className="px-4 py-3 text-center font-semibold text-gray-600">Statut</th>
-             <th className="px-4 py-3 text-right font-semibold text-gray-600">Action</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 bg-white">
-          {transactions.map((tx) => {
+          {invoiceTransactions.map((tx) => {
             const remaining = tx.amount - tx.paidAmount;
             return (
               <Fragment key={tx._id}>
                 <tr className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-gray-600">
                     {format(new Date(tx.date), 'dd MMM yyyy', { locale: fr })}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">
+                    {tx.invoiceNumber ? (
+                      <div>
+                        <p className="font-semibold text-gray-800">{tx.invoiceNumber}</p>
+                        {tx.dueDate && (
+                          <p className="text-xs text-gray-500">
+                            Échéance: {format(new Date(tx.dueDate), 'dd MMM yyyy', { locale: fr })}
+                          </p>
+                        )}
+                      </div>
+                    ) : '-'}
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-800">
                     {tx.products?.[0]?.product?.name || tx.description || tx.title || 'N/A'}
@@ -120,48 +212,51 @@ const SupplierHistory = ({ supplierId, onPay }) => {
                   <td className="px-4 py-3 text-center">
                     <Badge type={tx.paymentStatus}>{tx.paymentStatus}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    {remaining > 0 && tx.amount > 0 && (
-                      <button 
-                        onClick={() => onPay(tx)}
-                        className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full hover:bg-indigo-100 font-medium transition-colors"
-                      >
-                        Payer
-                      </button>
-                    )}
-                  </td>
                 </tr>
-                 {/* Payment History Sub-rows */}
-                 {tx.paymentHistory && tx.paymentHistory.length > 0 && (
-                   <tr className="bg-gray-50/50">
-                     <td colSpan="6" className="px-4 py-2 border-t border-gray-100">
-                       <div className="ml-8 pl-4 border-l-2 border-indigo-200">
-                         <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Historique des paiements</p>
-                         <div className="space-y-2">
-                           {tx.paymentHistory.map((pmt, idx) => (
-                             <div key={idx} className="flex items-center text-xs text-gray-600 gap-4 bg-white p-2 rounded shadow-sm border border-gray-100 max-w-3xl">
-                               <span className="w-24 font-medium">{format(new Date(pmt.date), 'dd MMM yyyy', { locale: fr })}</span>
-                               <span className="flex-1 font-mono text-green-600 font-bold">+{pmt.amount.toLocaleString('fr-FR')} DA</span>
-                               <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-500 border border-gray-200">{pmt.method}</span>
-                               <span className="text-gray-500 flex items-center gap-1" title="Effectué par">
-                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                   <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                                 </svg>
-                                 {pmt.paidBy?.name || 'Inconnu'}
-                               </span>
-                               {pmt.note && <span className="text-gray-400 italic flex-1 truncate">"{pmt.note}"</span>}
-                             </div>
-                           ))}
-                         </div>
-                       </div>
-                     </td>
-                   </tr>
-                )}
               </Fragment>
             );
           })}
+          {invoiceTransactions.length === 0 && (
+            <tr>
+              <td colSpan="6" className="px-4 py-8 text-center text-gray-500">Aucune facture trouvée.</td>
+            </tr>
+          )}
         </tbody>
       </table>
+      </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg mt-2 border border-gray-200">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Source</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Facture liée</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Méthode</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Par</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Montant</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {paymentTransactions.map((pmt) => (
+                <tr key={pmt.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 text-gray-600">{format(new Date(pmt.date), 'dd MMM yyyy', { locale: fr })}</td>
+                  <td className="px-4 py-3 text-gray-700">{pmt.source}</td>
+                  <td className="px-4 py-3 text-gray-700">{pmt.invoiceNumber || '-'}</td>
+                  <td className="px-4 py-3 text-gray-700">{pmt.method}</td>
+                  <td className="px-4 py-3 text-gray-700">{pmt.paidByName}</td>
+                  <td className="px-4 py-3 text-right font-mono text-green-600 font-bold">+{(pmt.amount || 0).toLocaleString('fr-FR')} DA</td>
+                </tr>
+              ))}
+              {paymentTransactions.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="px-4 py-8 text-center text-gray-500">Aucun paiement enregistré.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };
@@ -170,12 +265,6 @@ const SupplierHistory = ({ supplierId, onPay }) => {
 
 export default function SupplierExpenses() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [payAmount, setPayAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('Cash'); 
-  const [paymentNote, setPaymentNote] = useState('');
-  const [paymentPaidBy, setPaymentPaidBy] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedId, setExpandedId] = useState(null);
@@ -186,14 +275,17 @@ export default function SupplierExpenses() {
   // Modal Form State
   const [formData, setFormData] = useState({
     fournisseur: '',
-    product: '',
+    invoiceNumber: '',
+    invoiceDate: new Date().toISOString().split('T')[0],
+    dueDate: '',
     description: '',
-    quantity: 1,
     amount: '',
     paidAmount: '',
     paidBy: '', // Added field
     date: new Date().toISOString().split('T')[0]
   });
+
+  const [invoiceItems, setInvoiceItems] = useState([]);
 
   const queryClient = useQueryClient();
 
@@ -297,57 +389,43 @@ export default function SupplierExpenses() {
     onSuccess: () => {
       queryClient.invalidateQueries(['supplier-financials']);
       queryClient.invalidateQueries(['supplier-transactions']);
+      queryClient.invalidateQueries(['supplier-stats']);
       toast.success('Dépense enregistrée avec succès');
       setIsModalOpen(false);
+      setInvoiceItems([]);
       setFormData({
-        fournisseur: '', product: '', description: '', quantity: 1, amount: '', paidAmount: '', paidBy: '', date: new Date().toISOString().split('T')[0]
+        fournisseur: '', invoiceNumber: '', invoiceDate: new Date().toISOString().split('T')[0], dueDate: '', description: '', amount: '', paidAmount: '', paidBy: '', date: new Date().toISOString().split('T')[0]
       });
     },
     onError: () => toast.error("Erreur lors de l'enregistrement")
   });
 
-  // Add Payment Mutation
-  const addPaymentMutation = useMutation({
-    mutationFn: async ({ id, amount, date, method, note, paidBy }) => {
-      return api.post(`/expenses/${id}/payments`, { amount, date, method, note, paidBy });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['supplier-financials']);
-      queryClient.invalidateQueries(['supplier-transactions']);
-      toast.success('Paiement enregistré avec succès');
-      setIsPayModalOpen(false);
-      setSelectedInvoice(null);
-      setPayAmount('');
-      setPaymentMethod('Cash');
-      setPaymentNote('');
-      setPaymentPaidBy('');
-    },
-    onError: (err) => toast.error(err.response?.data?.message || "Erreur lors du paiement")
-  });
-
   // Form Handlers
-  const handleProductChange = (productId) => {
-    const product = productsList?.find(p => p._id === productId);
-    if(product) {
-      setFormData(prev => ({
-        ...prev,
-        product: productId,
-        fournisseur: product.fournisseur?._id || prev.fournisseur,
-        amount: (product.buyingPrice || 0) * prev.quantity, 
-        description: `Achat: ${product.reference}`
-      }));
-    } else {
-       setFormData(prev => ({ ...prev, product: productId }));
-    }
+  const addInvoiceItem = () => {
+    setInvoiceItems([...invoiceItems, { productId: '', quantity: 1, unitPrice: 0 }]);
   };
 
-  const handleQuantityChange = (qty) => {
-    const quantity = Number(qty);
-    setFormData(prev => {
-        const product = productsList?.find(p => p._id === prev.product);
-        const newAmount = product ? (product.buyingPrice || 0) * quantity : prev.amount;
-        return { ...prev, quantity, amount: newAmount };
-    });
+  const removeInvoiceItem = (index) => {
+    setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
+  };
+
+  const updateInvoiceItem = (index, field, value) => {
+    const newItems = [...invoiceItems];
+    newItems[index][field] = value;
+
+    if (field === 'productId') {
+      const product = productsList?.find(p => p._id === value);
+      if (product) {
+        newItems[index].unitPrice = product.buyingPrice || 0;
+        if (!formData.fournisseur && product.fournisseurId) {
+          setFormData(prev => ({ ...prev, fournisseur: product.fournisseurId._id || product.fournisseurId }));
+        }
+      } else {
+        newItems[index].unitPrice = 0;
+      }
+    }
+
+    setInvoiceItems(newItems);
   };
 
   const selectedSupplierStats = useMemo(() => {
@@ -358,58 +436,36 @@ export default function SupplierExpenses() {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // If Payment Only, Amount (Cost) is 0.
-    const finalAmount = transactionType === 'paiement' ? 0 : Number(formData.amount);
-    const finalPaid = Number(formData.paidAmount);
+    const totalItemsAmount = invoiceItems.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
     
-    const product = productsList?.find(p => p._id === formData.product);
+    const finalAmount = transactionType === 'paiement' 
+        ? 0 
+        : (invoiceItems.length > 0 ? totalItemsAmount : Number(formData.amount));
+        
+    const finalPaid = transactionType === 'achat' ? 0 : Number(formData.paidAmount);
     
     const payload = {
-        title: formData.description || (transactionType === 'paiement' ? 'Règlement dette' : (product ? `Achat ${product.reference}` : 'Dépense Fournisseur')),
+      title: formData.description || (transactionType === 'paiement' ? 'Règlement dette' : (invoiceItems.length > 0 ? `Facture d'achat (${invoiceItems.length} articles)` : 'Dépense Fournisseur')),
         amount: finalAmount,
         category: transactionType === 'paiement' ? 'payment_processing' : 'inventory_purchase',
         fournisseur: formData.fournisseur,
         paidAmount: finalPaid,
         paidBy: formData.paidBy || undefined, // Send if selected
         date: formData.date,
+        invoiceNumber: transactionType === 'achat' ? (formData.invoiceNumber || undefined) : undefined,
+        invoiceDate: transactionType === 'achat' ? (formData.invoiceDate || formData.date) : undefined,
+        dueDate: transactionType === 'achat' ? (formData.dueDate || undefined) : undefined,
+        reference: transactionType === 'achat' ? (formData.invoiceNumber || undefined) : undefined,
         description: formData.description,
         paymentStatus: transactionType === 'paiement' ? 'payé' : ((finalAmount - finalPaid) <= 0 ? 'payé' : finalPaid > 0 ? 'partiel' : 'non payé'),
-        products: (transactionType === 'achat' && formData.product) ? [{
-            product: formData.product,
-            quantity: Number(formData.quantity),
-            unitPrice: Number(formData.amount) / Number(formData.quantity)
-        }] : []
+        products: transactionType === 'achat' ? invoiceItems.filter(i => i.productId).map(item => ({
+            product: item.productId,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unitPrice)
+        })) : []
     };
 
     createMutation.mutate(payload);
-  };
-
-  const openPayModal = (invoice) => {
-    setSelectedInvoice(invoice);
-    setPayAmount(String(invoice.amount - invoice.paidAmount)); // Propose paying the remaining
-    setIsPayModalOpen(true);
-  };
-
-  const handlePaySubmit = (e) => {
-    e.preventDefault();
-    if (!selectedInvoice) return;
-
-    const payment = Number(payAmount);
-    
-    // Safety check just in case
-    if (payment <= 0) {
-        toast.error("Le montant doit être supérieur à 0");
-        return;
-    }
-
-    addPaymentMutation.mutate({
-      id: selectedInvoice._id,
-      amount: payment,
-      date: new Date(), // Could add a date picker if needed, but 'now' is fine for quick payment
-      method: paymentMethod,
-      note: paymentNote,
-      paidBy: paymentPaidBy || undefined
-    });
   };
 
   return (
@@ -445,11 +501,19 @@ export default function SupplierExpenses() {
           </button>
 
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => { setTransactionType('achat'); setIsModalOpen(true); }}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 font-medium"
           >
             <FaPlus size={14} />
-            <span>Nouveau</span>
+            <span>Nouvelle Facture</span>
+          </button>
+
+          <button 
+            onClick={() => { setTransactionType('paiement'); setIsModalOpen(true); }}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 font-medium"
+          >
+            <FaMoneyBillWave size={14} />
+            <span>Nouveau Paiement</span>
           </button>
         </div>
       </div>
@@ -491,7 +555,10 @@ export default function SupplierExpenses() {
              <p className="text-gray-500 mt-1">Essayez un autre terme de recherche ou ajoutez une dépense.</p>
           </div>
         ) : (
-          filteredSuppliers.map((s) => (
+          filteredSuppliers.map((s) => {
+            const paidPercent = s.totalAmount > 0 ? ((s.totalPaid / s.totalAmount) * 100).toFixed(0) : '0';
+
+            return (
             <div 
               key={s.fournisseur._id} 
               className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 ${expandedId === s.fournisseur._id ? 'ring-2 ring-blue-500 shadow-md' : 'hover:shadow-md'}`}
@@ -519,7 +586,7 @@ export default function SupplierExpenses() {
                 {/* Middle: Progress & Status */}
                 <div className="flex-1 max-w-sm px-4">
                    <div className="flex justify-between text-xs font-semibold mb-1 uppercase tracking-wide">
-                     <span className="text-green-600">Payé: {((s.totalPaid / s.totalAmount) * 100).toFixed(0)}%</span>
+                     <span className="text-green-600">Payé: {paidPercent}%</span>
                      <span className="text-gray-400">Total: {s.totalAmount.toLocaleString()}</span>
                    </div>
                    <ProgressBar paid={s.totalPaid} total={s.totalAmount} />
@@ -569,11 +636,12 @@ export default function SupplierExpenses() {
                       Historique des transactions
                     </h4>
                   </div>
-                  <SupplierHistory supplierId={s.fournisseur._id} onPay={openPayModal} />
+                  <SupplierHistory supplierId={s.fournisseur._id} />
                 </div>
               )}
             </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -581,72 +649,22 @@ export default function SupplierExpenses() {
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        title="Gestion Transaction"
+        title={transactionType === 'achat' ? 'Nouvelle Facture' : 'Nouveau Paiement'}
       >
-        <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
-          <button
-             onClick={() => setTransactionType('achat')}
-             className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-               transactionType === 'achat' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-             }`}
-          >
-            Nouvel Achat
-          </button>
-          <button
-             onClick={() => setTransactionType('paiement')}
-             className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-               transactionType === 'paiement' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-             }`}
-          >
-            Règlement dette
-          </button>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-6">
           
           {transactionType === 'achat' && (
             <div className="bg-blue-50 p-4 rounded-lg flex items-start gap-3 border border-blue-100">
               <FaExclamationCircle className="text-blue-500 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-blue-800 leading-relaxed">
-                Si vous sélectionnez un produit, le fournisseur et le prix d'achat seront remplis automatiquement. 
-                Sinon, vous pouvez saisir une dépense libre (ex: Transport).
+                Ajoutez les produits pour générer le montant total. Sans produits, vous pourrez saisir un montant global manuel. Le paiement avance n'est plus applicable ici.
               </p>
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Left Column: Who & What */}
-            <div className="space-y-4">
-               {transactionType === 'achat' && (
-                 <div className="flex gap-4">
-                   <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Produit concerné</label>
-                      <div className="relative">
-                        <select 
-                          value={formData.product}
-                          onChange={(e) => handleProductChange(e.target.value)}
-                          className="w-full pl-3 pr-10 py-2 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                        >
-                          <option value="">-- Aucun --</option>
-                          {Array.isArray(productsList) && productsList.map(p => (
-                            <option key={p._id} value={p._id}> {p.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                   </div>
-                   <div className="w-24">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Qté</label>
-                      <input 
-                        type="number" 
-                        min="1"
-                        value={formData.quantity}
-                        onChange={(e) => handleQuantityChange(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                   </div>
-                 </div>
-               )}
-
+            <div className={`space-y-4 ${transactionType === 'achat' ? 'md:col-span-2' : ''}`}>
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">Fournisseur <span className="text-red-500">*</span></label>
                  <select 
@@ -662,6 +680,81 @@ export default function SupplierExpenses() {
                   </select>
                </div>
 
+               {transactionType === 'achat' && (
+                 <div className="bg-white border border-gray-200 rounded-lg p-4">
+                   <div className="flex justify-between items-center mb-3">
+                     <h4 className="font-semibold text-gray-800">Produits de la facture</h4>
+                     <button type="button" onClick={addInvoiceItem} className="text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded-md hover:bg-blue-100 transition-colors font-medium">
+                       + Ajouter un produit
+                     </button>
+                   </div>
+                   
+                   {invoiceItems.length === 0 ? (
+                     <p className="text-sm text-gray-500 text-center py-4">Saisie manuelle du montant global activée (aucun produit sélectionné).</p>
+                   ) : (
+                     <div className="space-y-3">
+                       {invoiceItems.map((item, index) => (
+                         <div key={index} className="flex gap-3 items-end bg-gray-50 p-3 rounded-lg border border-gray-100">
+                           <div className="flex-1">
+                             <label className="block text-xs font-medium text-gray-500 mb-1">Produit</label>
+                             <select 
+                               value={item.productId}
+                               onChange={(e) => updateInvoiceItem(index, 'productId', e.target.value)}
+                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none text-sm"
+                             >
+                               <option value="">-- Sélectionner --</option>
+                               {Array.isArray(productsList) && productsList.map(p => (
+                                 <option key={p._id} value={p._id}>{p.name}</option>
+                               ))}
+                             </select>
+                           </div>
+                           <div className="w-20">
+                             <label className="block text-xs font-medium text-gray-500 mb-1">Qté</label>
+                             <input 
+                               type="number" 
+                               min="1"
+                               value={item.quantity}
+                               onChange={(e) => updateInvoiceItem(index, 'quantity', Math.max(1, Number(e.target.value)))}
+                               className="w-full px-2 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none text-sm"
+                             />
+                           </div>
+                           <div className="w-28">
+                             <label className="block text-xs font-medium text-gray-500 mb-1">Prix Unitaire</label>
+                             <input 
+                               type="number" 
+                               min="0"
+                               value={item.unitPrice}
+                               onChange={(e) => updateInvoiceItem(index, 'unitPrice', Number(e.target.value))}
+                               className="w-full px-2 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none text-sm"
+                             />
+                           </div>
+                           <div className="w-24 text-right">
+                             <label className="block text-xs font-medium text-gray-500 mb-1">Total</label>
+                             <div className="py-2 text-sm font-semibold text-gray-800">
+                               {(item.quantity * item.unitPrice).toLocaleString()}
+                             </div>
+                           </div>
+                           <button 
+                             type="button" 
+                             onClick={() => removeInvoiceItem(index)}
+                             className="p-2 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                           >
+                             <FaTrash size={14} />
+                           </button>
+                         </div>
+                       ))}
+                       
+                       <div className="flex justify-end pt-3 border-t border-gray-200">
+                         <p className="text-gray-600 text-sm font-medium mr-4">Total Facture (calculé):</p>
+                         <p className="text-lg font-bold text-gray-900">
+                           {invoiceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()} <span className="text-sm font-normal text-gray-500">DA</span>
+                         </p>
+                       </div>
+                     </div>
+                   )}
+                 </div>
+               )}
+
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                  <input 
@@ -672,6 +765,42 @@ export default function SupplierExpenses() {
                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                  />
                </div>
+
+               {transactionType === 'achat' && (
+                 <>
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">N° Facture (optionnel)</label>
+                     <input
+                       type="text"
+                       value={formData.invoiceNumber}
+                       onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
+                       className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                       placeholder="Ex: FAC-2026-031"
+                     />
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-3">
+                     <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Date facture</label>
+                       <input
+                         type="date"
+                         value={formData.invoiceDate}
+                         onChange={(e) => setFormData({ ...formData, invoiceDate: e.target.value })}
+                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">Date échéance</label>
+                       <input
+                         type="date"
+                         value={formData.dueDate}
+                         onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                         className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                       />
+                     </div>
+                   </div>
+                 </>
+               )}
 
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">Effectué par</label>
@@ -688,24 +817,26 @@ export default function SupplierExpenses() {
                </div>
             </div>
 
-            {/* Right Column: Financials */}
-            <div className="space-y-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+            {/* Right Column / Bottom: Financials */}
+            <div className={`space-y-4 bg-gray-50 p-4 rounded-xl border border-gray-200 ${transactionType === 'achat' ? 'md:col-span-2' : ''}`}>
                {transactionType === 'achat' ? (
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">Montant Total (Achat)</label>
-                   <div className="relative">
-                     <input 
-                       type="number" 
-                       required
-                       min="0"
-                       value={formData.amount}
-                       onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})}
-                       className="w-full pl-3 pr-12 py-2 border rounded-lg font-mono text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                       placeholder="0.00"
-                     />
-                     <span className="absolute right-3 top-2 text-gray-400 text-sm">DA</span>
+                 invoiceItems.length === 0 && (
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">Montant Global (Saisie Manuelle)</label>
+                     <div className="relative md:w-1/2">
+                       <input 
+                         type="number" 
+                         required
+                         min="0"
+                         value={formData.amount}
+                         onChange={(e) => setFormData({...formData, amount: Number(e.target.value)})}
+                         className="w-full pl-3 pr-12 py-2 border rounded-lg font-mono text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                         placeholder="0.00"
+                       />
+                       <span className="absolute right-3 top-2 text-gray-400 text-sm">DA</span>
+                     </div>
                    </div>
-                 </div>
+                 )
                ) : (
                 <div className={`p-4 rounded-lg border mb-4 ${selectedSupplierStats?.details?.debt > 0 ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
                     <p className="text-sm font-medium text-gray-700 mb-1">Dette actuelle du fournisseur</p>
@@ -718,51 +849,30 @@ export default function SupplierExpenses() {
                 </div>
                )}
 
-               <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {transactionType === 'achat' ? 'Montant Payé (Avance)' : 'Montant du Règlement'}
-                 </label>
-                 <div className="relative">
-                   <input 
-                     type="number" 
-                     required
-                     min="0"
-                     value={formData.paidAmount}
-                     onChange={(e) => setFormData({...formData, paidAmount: Number(e.target.value)})}
-                     className="w-full pl-3 pr-12 py-2 border rounded-lg font-mono text-green-700 font-bold focus:ring-2 focus:ring-green-500 outline-none bg-green-50 border-green-200"
-                     placeholder="0.00"
-                   />
-                   <span className="absolute right-3 top-2 text-green-600 text-sm">DA</span>
-                 </div>
-               </div>
-
-               {transactionType === 'achat' && (
-                 <div className="pt-2 border-t border-gray-200 mt-2">
-                   <div className="flex justify-between items-center text-sm">
-                     <span className="text-gray-500">Reste (Dette):</span>
-                     <span className={`font-bold font-mono text-lg ${(formData.amount - formData.paidAmount) > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                       {(formData.amount - formData.paidAmount).toLocaleString()} DA
-                     </span>
+               {transactionType === 'paiement' && (
+                 <>
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Montant du Règlement
+                     </label>
+                     <div className="relative">
+                       <input 
+                         type="number" 
+                         required
+                         min="1"
+                         value={formData.paidAmount}
+                         onChange={(e) => setFormData({...formData, paidAmount: Number(e.target.value)})}
+                         className="w-full pl-3 pr-12 py-2 border rounded-lg font-mono text-green-700 font-bold focus:ring-2 focus:ring-green-500 outline-none bg-green-50 border-green-200"
+                         placeholder="0.00"
+                       />
+                       <span className="absolute right-3 top-2 text-green-600 text-sm">DA</span>
+                     </div>
                    </div>
-                 </div>
+                 </>
                )}
             </div>
           </div>
 
-          <div className="mb-4">
-             <label className="block text-sm font-medium text-gray-700 mb-1">Effectué par</label>
-             <select
-               className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-               value={formData.paidBy}
-               onChange={(e) => setFormData({ ...formData, paidBy: e.target.value })}
-             >
-               <option value="">(Moi-même)</option>
-               {usersList?.map(u => (
-                 <option key={u._id} value={u._id}>{u.name}</option>
-               ))}
-             </select>
-          </div>
-          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Description / Notes</label>
             <textarea 
@@ -791,88 +901,6 @@ export default function SupplierExpenses() {
         </form>
       </Modal>
 
-      {/* Pay Invoice Modal */}
-      <Modal isOpen={isPayModalOpen} onClose={() => setIsPayModalOpen(false)} title="Régler une facture">
-         <form onSubmit={handlePaySubmit}>
-            <div className="mb-4 bg-indigo-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">Reste à payer sur cette facture</p>
-                <p className="text-2xl font-bold text-indigo-700">{(selectedInvoice?.amount - selectedInvoice?.paidAmount)?.toLocaleString()} DA</p>
-                <p className="text-xs text-gray-400 mt-1">Total facture: {selectedInvoice?.amount?.toLocaleString()} DA</p>
-            </div>
-
-            <div className="form-group mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Montant du versement (DA)</label>
-                <div className="relative">
-                    <input
-                        type="number"
-                        className="w-full pl-4 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-mono text-lg"
-                        value={payAmount}
-                        onChange={(e) => setPayAmount(e.target.value)}
-                        required
-                        min="1"
-                        autoFocus
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">DA</span>
-                </div>
-            </div>
-
-            <div className="form-group mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Mode de paiement</label>
-                <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                >
-                    <option value="Cash">Espèces</option>
-                    <option value="Check">Chèque</option>
-                    <option value="Bank Transfer">Virement</option>
-                    <option value="Other">Autre</option>
-                </select>
-            </div>
-
-            <div className="form-group mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Effectué par</label>
-                <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={paymentPaidBy}
-                    onChange={(e) => setPaymentPaidBy(e.target.value)}
-                >
-                    <option value="">(Moi-même)</option>
-                    {usersList?.map(u => (
-                        <option key={u._id} value={u._id}>{u.name}</option>
-                    ))}
-                </select>
-            </div>
-
-            <div className="form-group mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Note (Optionnel)</label>
-                <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                    placeholder="Ex: N° Chèque, Remarque..."
-                    value={paymentNote}
-                    onChange={(e) => setPaymentNote(e.target.value)}
-                />
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-                <button
-                    type="button"
-                    onClick={() => setIsPayModalOpen(false)}
-                    className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium"
-                >
-                    Annuler
-                </button>
-                <button
-                    type="submit"
-                    disabled={addPaymentMutation.isPending}
-                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm font-medium transition-all transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                    {addPaymentMutation.isPending ? 'Traitement...' : 'Confirmer le paiement'}
-                </button>
-            </div>
-         </form>
-      </Modal>
     </div>
   );
 }

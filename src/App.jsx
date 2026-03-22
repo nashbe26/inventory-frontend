@@ -39,6 +39,7 @@ import DeliveryTeam from './pages/DeliveryTeam'
 import Bordereaux from './pages/Bordereaux'
 import ClaimOrder from './pages/ClaimOrder'
 import ClaimBordereau from './pages/ClaimBordereau'
+import ShopifySettings from './pages/ShopifySettings'
 import { useEffect } from 'react'
 import { io } from 'socket.io-client'
 import { toast, ToastContainer } from 'react-toastify'
@@ -154,6 +155,7 @@ function App() {
           <Route path="claim-bordereau/:code" element={<ClaimBordereau />} />
           <Route path="delivery-team" element={<DeliveryTeam />} />
           <Route path="bordereaux" element={<Bordereaux />} />
+          <Route path="shopify-settings" element={<ShopifySettings />} />
         </Route>
 
         {/* Catch all - redirect to home */}

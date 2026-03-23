@@ -565,7 +565,7 @@ const ShopifySettings = () => {
 
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            <strong>Product Matching:</strong> When a Shopify order comes in, products are matched by <strong>SKU</strong> first (variant SKU, then product SKU), then by <strong>product name</strong>. Import your products first so SKUs match automatically.
+            <strong>Product matching:</strong> Orders are linked using <strong>Shopify variant ID</strong> and <strong>product ID</strong> (saved when you use <strong>Import All Products</strong>), then <strong>SKU</strong> (normalized), then <strong>title</strong> (including titles like &quot;Product — Color / Size&quot;). Run import again after changing Shopify so IDs stay in sync.
           </p>
         </div>
       </div>

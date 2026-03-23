@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaFileAlt, FaPrint, FaEdit } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import Modal from '../components/Modal';
@@ -94,12 +94,14 @@ export default function Orders() {
     }
   });
 
+  // Load enough products for stock checks (default API limit is 20, which breaks availability for most SKUs)
   const { data: productsData } = useQuery({
-    queryKey: ['products'],
+    queryKey: ['products', 'orders-stock'],
     queryFn: async () => {
-      const res = await api.get('/products');
+      const res = await api.get('/products?page=1&limit=10000');
       return res.data;
-    }
+    },
+    staleTime: 60 * 1000
   });
 
   const { data: deliveryMenData } = useQuery({
@@ -143,31 +145,60 @@ export default function Orders() {
       )
     : [];
 
+  const idStr = (v) => (v == null ? '' : String(v));
+
+  const normSku = (s) => (s == null ? '' : String(s).trim().toUpperCase());
+
+  /** @returns {boolean|null} true/false if known, null if product/variant could not be resolved */
   const checkStockAvailability = (item) => {
     if (!productsData?.data) return null;
-    
+
     const pId = item.productId?._id || item.productId || item.product;
     if (!pId) return null;
 
-    const product = productsData.data.find(p => p._id === pId.toString());
+    const pid = idStr(pId);
+    const product = productsData.data.find((p) => idStr(p._id) === pid);
     if (!product) return null;
 
+    const needQty = Number(item.quantity);
+    if (!Number.isFinite(needQty) || needQty < 0) return null;
+
     if (product.variants && product.variants.length > 0) {
-        let variant = null;
-        if (item.variantId) {
-            const vId = item.variantId._id || item.variantId;
-            variant = product.variants.find(v => v._id === vId.toString());
-        }
-        if (!variant && item.sku) {
-            variant = product.variants.find(v => v.sku === item.sku);
-        }
-        if (variant) {
-            return variant.quantity >= item.quantity;
-        }
+      let variant = null;
+      if (item.variantId) {
+        const vId = item.variantId._id || item.variantId;
+        const vid = idStr(vId);
+        variant = product.variants.find((v) => idStr(v._id) === vid);
+      }
+      if (!variant && item.sku) {
+        const skuU = normSku(item.sku);
+        variant = product.variants.find((v) => normSku(v.sku) === skuU);
+      }
+      if (variant) {
+        return Number(variant.quantity) >= needQty;
+      }
+      // Multi-variant product but line didn't match a variant — don't guess parent qty
+      return null;
     }
 
-    const availableStock = product.quantity !== undefined ? product.quantity : product.totalQuantity;
-    return availableStock >= item.quantity;
+    const availableStock =
+      product.quantity !== undefined && product.quantity !== null
+        ? Number(product.quantity)
+        : product.totalQuantity !== undefined && product.totalQuantity !== null
+          ? Number(product.totalQuantity)
+          : NaN;
+    if (!Number.isFinite(availableStock)) return null;
+    return availableStock >= needQty;
+  };
+
+  /** Row-level stock icon: ok | out | unknown */
+  const getOrderStockDisplay = (order) => {
+    const items = order?.items;
+    if (!items?.length) return 'none';
+    const checks = items.map((i) => checkStockAvailability(i));
+    if (checks.some((c) => c === false)) return 'out';
+    if (checks.every((c) => c === true)) return 'ok';
+    return 'unknown';
   };
 
   const closeModal = () => {
@@ -667,15 +698,17 @@ export default function Orders() {
                                     {item.colorName && <span className="text-gray-600 ml-1">- {item.colorName}</span>}
                                     {item.sizeLabel && <span className="text-gray-600 ml-1">- {item.sizeLabel}</span>}
                                     {item.quantity > 1 && <span className="badge badge-sm badge-secondary" style={{ marginLeft: '5px' }}>x{item.quantity}</span>}
-                                    {isAvailable !== null && (
-                                        <span style={{ marginLeft: '5px', display: 'inline-flex', alignItems: 'center' }}>
-                                            {isAvailable ? (
-                                                <FaCheck className="text-green-500" title="In Stock" />
-                                            ) : (
-                                                <FaTimes className="text-red-500" title="Out of Stock" />
-                                            )}
-                                        </span>
-                                    )}
+                                    <span style={{ marginLeft: '5px', display: 'inline-flex', alignItems: 'center' }}>
+                                      {isAvailable === true && (
+                                        <FaCheck className="text-green-500" title="In stock" />
+                                      )}
+                                      {isAvailable === false && (
+                                        <FaTimes className="text-red-500" title="Out of stock" />
+                                      )}
+                                      {isAvailable === null && productsData?.data && (
+                                        <FaQuestionCircle className="text-gray-400" title="Stock unknown (product not found or variant not matched)" />
+                                      )}
+                                    </span>
                                 </div>
                             )})}
                         </div>
@@ -712,15 +745,31 @@ export default function Orders() {
                     </td>
                     <td>{new Date(order.createdAt).toLocaleDateString()}</td>
                     <td style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
-                      {order.items && order.items.length > 0 && order.items.every(item => checkStockAvailability(item)) ? (
-                          <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
-                              <FaCheck className="text-green-500" title="All Items In Stock" size={20} />
-                          </span>
-                      ) : (
-                          <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
-                              <FaTimes className="text-red-500" title="Some Items Out of Stock" size={20} />
-                          </span>
-                      )}
+                      {(() => {
+                        const stock = getOrderStockDisplay(order);
+                        if (stock === 'ok') {
+                          return (
+                            <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
+                              <FaCheck className="text-green-500" title="All items in stock" size={20} />
+                            </span>
+                          );
+                        }
+                        if (stock === 'out') {
+                          return (
+                            <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
+                              <FaTimes className="text-red-500" title="At least one item is out of stock" size={20} />
+                            </span>
+                          );
+                        }
+                        if (stock === 'unknown') {
+                          return (
+                            <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
+                              <FaQuestionCircle className="text-gray-400" title="Could not verify stock (product not loaded or variant not matched)" size={20} />
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       <button
                         className="btn btn-sm btn-primary"
@@ -1173,15 +1222,13 @@ export default function Orders() {
               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div><strong>{item.productName}</strong><br /><small>{item.quantity} x {item.unitPrice?.toFixed(2)} dt</small></div>
-                  {isAvailable !== null && (
-                      <span className="ml-2" style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          {isAvailable ? (
-                              <FaCheck className="text-green-500" title="In Stock" />
-                          ) : (
-                              <FaTimes className="text-red-500" title="Out of Stock" />
-                          )}
-                      </span>
-                  )}
+                  <span className="ml-2" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                    {isAvailable === true && <FaCheck className="text-green-500" title="In stock" />}
+                    {isAvailable === false && <FaTimes className="text-red-500" title="Out of stock" />}
+                    {isAvailable === null && productsData?.data && (
+                      <FaQuestionCircle className="text-gray-400" title="Stock unknown (product not found or variant not matched)" />
+                    )}
+                  </span>
                 </div>
                 <strong>{item.totalPrice?.toFixed(2)} dt</strong>
               </div>

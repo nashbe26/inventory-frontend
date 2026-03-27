@@ -53,8 +53,11 @@ export default function Orders() {
   const [customer, setCustomer] = useState({ nom: '', telephone: '', adresse: '', gouvernerat: '', ville: '', telephone2: '' });
   const [source, setSource] = useState('Direct');
   const [notes, setNotes] = useState('');
+  const [isExchange, setIsExchange] = useState(false);
   const [shipping, setShipping] = useState(8);
   const [productSearch, setProductSearch] = useState('');
+  const [variantPickerProduct, setVariantPickerProduct] = useState(null);
+  const [variantFilter, setVariantFilter] = useState('');
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [isBordereauModalOpen, setIsBordereauModalOpen] = useState(false);
   const [selectedDeliveryMan, setSelectedDeliveryMan] = useState('');
@@ -323,23 +326,68 @@ export default function Orders() {
   const pagination = { page, limit, total: allFilteredOrders.length, pages: Math.ceil(allFilteredOrders.length / limit) || 1 };
   const filteredOrders = allFilteredOrders.slice((page - 1) * limit, page * limit);
 
-  const filteredProducts = productSearch
-    ? (productsData?.data || []).filter(
-        (p) =>
-          p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-          p.sku.toLowerCase().includes(productSearch.toLowerCase())
-      )
-    : [];
+  const filteredProducts = useMemo(() => {
+    const q = (productSearch || '').trim().toLowerCase();
+    if (!q) return [];
+    return (productsData?.data || []).filter((p) => {
+      if ((p.name || '').toLowerCase().includes(q)) return true;
+      if ((p.sku || '').toLowerCase().includes(q)) return true;
+      return (p.variants || []).some((v) => {
+        if ((v.sku || '').toLowerCase().includes(q)) return true;
+        const c = typeof v.colorId === 'object' && v.colorId?.name ? v.colorId.name : '';
+        const s = typeof v.sizeId === 'object' && v.sizeId?.label ? String(v.sizeId.label) : '';
+        return c.toLowerCase().includes(q) || s.toLowerCase().includes(q);
+      });
+    });
+  }, [productSearch, productsData?.data]);
 
-  const closeModal = () => {
-    setIsModalOpen(false);
+  const variantPickerRows = useMemo(() => {
+    if (!variantPickerProduct?.variants?.length) return [];
+    const q = (variantFilter || '').trim().toLowerCase();
+    const rows = variantPickerProduct.variants.filter((v) => {
+      if (!q) return true;
+      if ((v.sku || '').toLowerCase().includes(q)) return true;
+      const color = typeof v.colorId === 'object' && v.colorId?.name ? v.colorId.name : '';
+      const size = typeof v.sizeId === 'object' && v.sizeId?.label ? String(v.sizeId.label) : '';
+      return color.toLowerCase().includes(q) || size.toLowerCase().includes(q);
+    });
+    rows.sort((a, b) => {
+      const na =
+        typeof a.colorId === 'object' && a.colorId?.name ? a.colorId.name : '';
+      const nb =
+        typeof b.colorId === 'object' && b.colorId?.name ? b.colorId.name : '';
+      const c = na.localeCompare(nb, 'fr', { sensitivity: 'base' });
+      if (c !== 0) return c;
+      const sa =
+        typeof a.sizeId === 'object' && a.sizeId?.label ? String(a.sizeId.label) : '';
+      const sb =
+        typeof b.sizeId === 'object' && b.sizeId?.label ? String(b.sizeId.label) : '';
+      return sa.localeCompare(sb, 'fr', { numeric: true });
+    });
+    return rows;
+  }, [variantPickerProduct, variantFilter]);
+
+  const resetOrderForm = () => {
     setEditingOrder(null);
     setOrderItems([]);
     setCustomer({ nom: '', telephone: '', adresse: '', gouvernerat: '', ville: '', telephone2: '' });
     setSource('Direct');
     setNotes('');
+    setIsExchange(false);
     setShipping(8);
     setProductSearch('');
+    setVariantPickerProduct(null);
+    setVariantFilter('');
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    resetOrderForm();
+  };
+
+  const openNewOrderModal = () => {
+    resetOrderForm();
+    setIsModalOpen(true);
   };
 
   const createMutation = useMutation({
@@ -534,7 +582,7 @@ export default function Orders() {
     }
   });
 
-  const addItemToOrder = (product, variant) => {
+  const addItemToOrder = (product, variant, fromVariantStep = false) => {
     const itemKey = variant ? `${product._id}-${variant._id}` : product._id;
     const existingItem = orderItems.find(item => item.itemKey === itemKey);
     
@@ -560,7 +608,11 @@ export default function Orders() {
         availableStock: availableStock
       }]);
     }
-    setProductSearch('');
+    if (!fromVariantStep) {
+      setProductSearch('');
+      setVariantPickerProduct(null);
+      setVariantFilter('');
+    }
   };
 
   const removeItem = (itemKey) => {
@@ -602,19 +654,26 @@ export default function Orders() {
     setCustomer(order.customer || { nom: '', telephone: '', adresse: '', gouvernerat: '', ville: '', telephone2: '' });
     setSource(order.source || 'Direct');
     setNotes(order.notes || '');
+    setIsExchange(Boolean(order.isExchange));
     setShipping(order.shipping || 8);
-    
+    setVariantPickerProduct(null);
+    setVariantFilter('');
+
     // Map existing order items to the state format
-    const mappedItems = order.items.map(item => ({
-        itemKey: item.variantId ? `${item.productId?._id || item.productId}-${item.variantId}` : (item.productId?._id || item.productId),
-        productId: item.productId?._id || item.productId,
-        variantId: item.variantId,
+    const mappedItems = order.items.map((item) => {
+      const pid = item.productId?._id || item.productId;
+      const vid = item.variantId?._id || item.variantId;
+      return {
+        itemKey: vid ? `${pid}-${vid}` : pid,
+        productId: pid,
+        variantId: vid,
         productName: item.productName,
         sku: item.sku,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         availableStock: 9999 // We don't have exact available stock without finding the product again, so we assume a large number for editing existing qty, or it can be limited by product stock later
-    }));
+      };
+    });
     
     setOrderItems(mappedItems);
     setIsModalOpen(true);
@@ -629,15 +688,18 @@ export default function Orders() {
     
     const orderData = {
         customer,
-        items: orderItems.map(item => ({
+        items: orderItems.map((item) => ({
             product: item.productId,
+            variantId: item.variantId,
             variant: item.variantId,
             quantity: item.quantity,
+            unitPrice: item.unitPrice,
             price: item.unitPrice
         })),
         shipping,
         source,
-        notes
+        notes,
+        isExchange
     };
 
     if (editingOrder) {
@@ -684,7 +746,7 @@ export default function Orders() {
                     </button>
                 </>
             )}
-            <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+            <button className="btn btn-primary" onClick={openNewOrderModal}>
             <FaPlus /> New Order
             </button>
             {(user.role === 'admin' || user.role === 'manager') && (
@@ -945,22 +1007,27 @@ export default function Orders() {
                     <td>{order.items?.length || 0} items</td>
                     <td><strong>{order.total?.toFixed(2)} dt</strong></td>
                     <td>
-                      {(user.role === 'admin' || user.role === 'manager') ? (
-                        <select
-                          className={`badge ${getStatusBadge(order.status)}`}
-                          value={order.status}
-                          onChange={(e) => updateStatusMutation.mutate({ id: order._id, status: e.target.value })}
-                          style={{ cursor: 'pointer', border: 'none' }}
-                        >
-                          {statuses.map(status => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className={`badge ${getStatusBadge(order.status)}`}>
-                            {order.status}
-                        </span>
-                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
+                        {(user.role === 'admin' || user.role === 'manager') ? (
+                          <select
+                            className={`badge ${getStatusBadge(order.status)}`}
+                            value={order.status}
+                            onChange={(e) => updateStatusMutation.mutate({ id: order._id, status: e.target.value })}
+                            style={{ cursor: 'pointer', border: 'none' }}
+                          >
+                            {statuses.map(status => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className={`badge ${getStatusBadge(order.status)}`}>
+                              {order.status}
+                          </span>
+                        )}
+                        {order.isExchange && (
+                          <span className="badge badge-warning" title="Commande échange">Échange</span>
+                        )}
+                      </div>
                     </td>
                     <td>
                         {order.deliveryBarcode ? (
@@ -1189,69 +1256,178 @@ export default function Orders() {
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingOrder ? `Edit Order ${editingOrder.orderNumber}` : "Create New Order"}>
         <form onSubmit={handleSubmit}>
           <div className="relative mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Add Products</label>
-            <div className="relative">
-              <input
-                type="text"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="Search products by name or SKU..."
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-              />
-              <FaSearch className="absolute right-4 top-3.5 text-gray-400" />
-            </div>
-            
-            {productSearch && filteredProducts.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto">
-                {filteredProducts.slice(0, 10).map(product => {
-                    const hasVariants = product.variants && product.variants.length > 0;
-                    if (hasVariants) {
-                        return product.variants.map((v) => (
-                             <div
-                                key={`${product._id}-${v._id}`}
-                                onClick={() => addItemToOrder(product, v)}
-                                className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0 flex justify-between items-center group transition-colors"
-                             >
-                                <div>
-                                  <div className="font-semibold text-gray-800">{product.name}</div>
-                                  <div className="text-sm text-gray-500">
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-2">
-                                      {v.colorId?.name} / {v.sizeId?.label}
-                                    </span>
-                                    <span className="text-gray-400">{v.sku}</span>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="font-bold text-gray-900">{product.price || 0} dt</div>
-                                  <div className={`text-xs ${v.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    Stock: {v.quantity}
-                                  </div>
-                                </div>
-                             </div>
-                        ));
-                    } else {
-                        return (
-                            <div
-                                key={product._id}
-                                onClick={() => addItemToOrder(product, null)}
-                                className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0 flex justify-between items-center group transition-colors"
+            <label className="block text-sm font-medium text-gray-700 mb-2">Add products</label>
+
+            {!variantPickerProduct ? (
+              <>
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    placeholder="Search by product name, SKU, color or size…"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <FaSearch className="absolute right-4 top-3.5 text-gray-400" />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Products with variants open a list where you can filter and add each size/color.
+                </p>
+
+                {productSearch.trim() && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto">
+                    {filteredProducts.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-gray-500">No products match.</div>
+                    ) : (
+                      <>
+                        {filteredProducts.slice(0, 25).map((product) => {
+                          const nVar = product.variants?.length || 0;
+                          const hasVariants = nVar > 0;
+                          const totalStock = hasVariants
+                            ? product.variants.reduce((s, v) => s + (Number(v.quantity) || 0), 0)
+                            : Number(product.quantity ?? product.totalQuantity ?? 0);
+                          return (
+                            <button
+                              key={product._id}
+                              type="button"
+                              onClick={() => {
+                                if (hasVariants) {
+                                  setVariantPickerProduct(product);
+                                  setVariantFilter('');
+                                } else {
+                                  addItemToOrder(product, null);
+                                }
+                              }}
+                              className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 flex justify-between items-center gap-3 transition-colors"
                             >
-                                <div>
-                                  <div className="font-semibold text-gray-800">{product.name}</div>
-                                  <div className="text-sm text-gray-500">
-                                    <span className="text-gray-400">{product.sku}</span>
-                                  </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold text-gray-800 truncate">{product.name}</div>
+                                <div className="text-sm text-gray-500 truncate">
+                                  {product.sku && <span className="text-gray-400 mr-2">{product.sku}</span>}
+                                  {hasVariants ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-800">
+                                      {nVar} variant{nVar !== 1 ? 's' : ''} — choose…
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-green-700">Add to order</span>
+                                  )}
                                 </div>
-                                <div className="text-right">
-                                  <div className="font-bold text-gray-900">{product.price || 0} dt</div>
-                                  <div className={`text-xs ${(product.quantity || product.totalQuantity) > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    Stock: {product.quantity || product.totalQuantity}
-                                  </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <div className="font-bold text-gray-900">{product.price ?? 0} dt</div>
+                                <div
+                                  className={`text-xs ${totalStock > 0 ? 'text-green-600' : 'text-red-600'}`}
+                                >
+                                  Stock: {totalStock}
                                 </div>
-                            </div>
-                        );
-                    }
-                })}
+                              </div>
+                            </button>
+                          );
+                        })}
+                        {filteredProducts.length > 25 && (
+                          <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-t">
+                            Refine search ({filteredProducts.length} products).
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="rounded-xl border border-gray-200 bg-slate-50 p-4 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-lg text-gray-900 leading-tight">
+                      {variantPickerProduct.name}
+                    </div>
+                    <div className="text-sm text-gray-600 mt-0.5">
+                      {variantPickerProduct.variants?.length || 0} variants — filter, then add
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary flex-shrink-0"
+                    onClick={() => {
+                      setVariantPickerProduct(null);
+                      setVariantFilter('');
+                    }}
+                  >
+                    ← Back to search
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Filter: color, size or SKU…"
+                    value={variantFilter}
+                    onChange={(e) => setVariantFilter(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <FaSearch className="absolute right-3 top-3 text-gray-400 text-sm" />
+                </div>
+
+                <div className="max-h-72 overflow-auto rounded-lg border border-gray-200 bg-white">
+                  {variantPickerRows.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm text-gray-500">No variants match this filter.</div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 z-10 bg-gray-100 text-gray-700 shadow-sm">
+                        <tr>
+                          <th className="text-left font-semibold px-3 py-2">Color</th>
+                          <th className="text-left font-semibold px-3 py-2">Size</th>
+                          <th className="text-left font-semibold px-3 py-2 hidden sm:table-cell">SKU</th>
+                          <th className="text-right font-semibold px-3 py-2">Stock</th>
+                          <th className="px-2 py-2 w-24" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {variantPickerRows.map((v) => {
+                          const stock = Number(v.quantity) || 0;
+                          const color =
+                            typeof v.colorId === 'object' && v.colorId?.name
+                              ? v.colorId.name
+                              : '—';
+                          const size =
+                            typeof v.sizeId === 'object' && v.sizeId?.label
+                              ? String(v.sizeId.label)
+                              : '—';
+                          return (
+                            <tr
+                              key={v._id}
+                              className="border-t border-gray-100 hover:bg-blue-50/50"
+                            >
+                              <td className="px-3 py-2 font-medium text-gray-800">{color}</td>
+                              <td className="px-3 py-2 text-gray-700">{size}</td>
+                              <td className="px-3 py-2 text-gray-500 text-xs hidden sm:table-cell font-mono">
+                                {v.sku || '—'}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <span className={stock > 0 ? 'text-green-700 font-medium' : 'text-red-600'}>
+                                  {stock}
+                                </span>
+                              </td>
+                              <td className="px-2 py-2">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-primary w-full"
+                                  onClick={() => addItemToOrder(variantPickerProduct, v, true)}
+                                  title="Add one unit (or increase qty if already in order)"
+                                >
+                                  <FaPlus className="inline mr-1" style={{ fontSize: '0.7rem' }} />
+                                  Add
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1349,6 +1525,17 @@ export default function Orders() {
               <input type="text" className="form-control" placeholder="Address" value={customer.adresse} style={{gridColumn: 'span 2'}}
                 onChange={(e) => setCustomer({ ...customer, adresse: e.target.value })} />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: '500' }}>
+              <input
+                type="checkbox"
+                checked={isExchange}
+                onChange={(e) => setIsExchange(e.target.checked)}
+              />
+              Échange (remplacement / retour produit)
+            </label>
           </div>
 
           <div className="form-group">
@@ -1486,6 +1673,9 @@ export default function Orders() {
             <h4>Customer</h4>
             <p><strong>Name:</strong> {selectedOrder.customer?.nom || 'N/A'}</p>
             <p><strong>Source:</strong> {selectedOrder.source || 'Direct'}</p>
+            {selectedOrder.isExchange && (
+              <p><span className="badge badge-warning">Échange</span></p>
+            )}
             {selectedOrder.customer?.telephone && <p><strong>Phone:</strong> {selectedOrder.customer.telephone}</p>}
             {selectedOrder.customer?.telephone2 && <p><strong>Phone 2:</strong> {selectedOrder.customer.telephone2}</p>}
             {selectedOrder.customer?.adresse && <p><strong>Address:</strong> {selectedOrder.customer.adresse}, {selectedOrder.customer.ville}, {selectedOrder.customer.gouvernerat}</p>}

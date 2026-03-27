@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle, FaCopy, FaExclamationTriangle, FaLayerGroup } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import api from '../services/api';
+import api, { syncShopifyOrdersAllBatches } from '../services/api';
 import Modal from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -58,6 +58,8 @@ export default function Orders() {
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [isBordereauModalOpen, setIsBordereauModalOpen] = useState(false);
   const [selectedDeliveryMan, setSelectedDeliveryMan] = useState('');
+  const [stockFilter, setStockFilter] = useState(''); // '' | 'available' | 'unavailable'
+  const [outOfStockOrder, setOutOfStockOrder] = useState(null);
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -73,22 +75,12 @@ export default function Orders() {
   });
 
   const { data: ordersData, isLoading } = useQuery({
-    queryKey: ['orders', statusFilter, page, limit, searchTerm], // Added pagination deps
+    queryKey: ['orders', statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (statusFilter) params.append('status', statusFilter);
-      params.append('page', page);
-      params.append('limit', limit);
-      // Backend handling for search term could be added later, or client-side filter
-      // If we want backend search, we need to pass it. Currently search is client-side filter on current page which is wrong for pagination.
-      // Ideally backend should handle search. For now I will just use backend pagination and client filter only for current page, 
-      // but user asked for pagination so I must ensure robust behavior.
-      // If searchTerm is present, maybe we shouldn't rely on generic getOrders pagination unless backend supports 'search' param?
-      // Let's assume pagination applies to filtered result. 
-      // NOTE: Current backend doesn't seem to support 'search' param in getOrders. 
-      // So search works only on displayed page which is partial.
-      // For this task I will focus on pagination controls.
-      
+      params.append('page', 1);
+      params.append('limit', 10000);
       const res = await api.get(`/orders?${params}`);
       return res.data;
     }
@@ -118,32 +110,6 @@ export default function Orders() {
   });
 
   const orders = ordersData?.data || [];
-  const pagination = ordersData?.pagination || { page: 1, limit: 20, total: 0, pages: 0 };
-  
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
-        order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customer?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customer?.telephone?.includes(searchTerm) ||
-        order.items?.some(item => 
-          item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.sku?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        
-    const matchesProduct = productFilter === '' || order.items?.some(item => {
-        const pId = item.productId?._id || item.productId || item.product;
-        return pId?.toString() === productFilter;
-    });
-
-    return matchesSearch && matchesProduct;
-  });
-
-  const filteredProducts = productSearch
-    ? (productsData?.data || []).filter(p => 
-        p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-        p.sku.toLowerCase().includes(productSearch.toLowerCase())
-      )
-    : [];
 
   const idStr = (v) => (v == null ? '' : String(v));
 
@@ -191,7 +157,37 @@ export default function Orders() {
     return availableStock >= needQty;
   };
 
-  /** Row-level stock icon: ok | out | unknown */
+  const getItemStockDetail = (item) => {
+    if (!productsData?.data) return { available: null, have: null, need: item.quantity };
+    const pId = item.productId?._id || item.productId || item.product;
+    if (!pId) return { available: null, have: null, need: item.quantity };
+    const pid = idStr(pId);
+    const product = productsData.data.find((p) => idStr(p._id) === pid);
+    if (!product) return { available: null, have: null, need: item.quantity };
+    const needQty = Number(item.quantity);
+    if (product.variants && product.variants.length > 0) {
+      let variant = null;
+      if (item.variantId) {
+        const vid = idStr(item.variantId._id || item.variantId);
+        variant = product.variants.find((v) => idStr(v._id) === vid);
+      }
+      if (!variant && item.sku) {
+        variant = product.variants.find((v) => normSku(v.sku) === normSku(item.sku));
+      }
+      if (variant) {
+        const have = Number(variant.quantity);
+        return { available: have >= needQty, have, need: needQty };
+      }
+      return { available: null, have: null, need: needQty };
+    }
+    const have =
+      product.quantity !== undefined && product.quantity !== null ? Number(product.quantity)
+      : product.totalQuantity !== undefined ? Number(product.totalQuantity) : NaN;
+    if (!Number.isFinite(have)) return { available: null, have: null, need: needQty };
+    return { available: have >= needQty, have, need: needQty };
+  };
+
+  /** Row-level shelf check only (no allocation order): ok | out | unknown | none */
   const getOrderStockDisplay = (order) => {
     const items = order?.items;
     if (!items?.length) return 'none';
@@ -200,6 +196,140 @@ export default function Orders() {
     if (checks.every((c) => c === true)) return 'ok';
     return 'unknown';
   };
+
+  const stockMappingExcludedStatuses = ['livré', 'annulé', 'annulée'];
+
+  const stockMapping = useMemo(() => {
+    const map = {};
+    if (!productsData?.data || !orders.length) return map;
+
+    const virtualStock = {};
+    for (const p of productsData.data) {
+      if (p.variants?.length) {
+        for (const v of p.variants) {
+          const key = `${p._id}::${v._id}`;
+          virtualStock[key] = Number(v.quantity) || 0;
+        }
+      } else {
+        const qty = p.quantity !== undefined ? Number(p.quantity) : (p.totalQuantity !== undefined ? Number(p.totalQuantity) : 0);
+        virtualStock[`${p._id}::__root`] = qty;
+      }
+    }
+
+    const eligible = orders
+      .filter((o) => !stockMappingExcludedStatuses.includes((o.status || '').toLowerCase()))
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    let rank = 0;
+    for (const order of eligible) {
+      const items = order.items || [];
+      if (!items.length) { map[order._id] = { fulfillable: false, rank: null, shortages: [] }; continue; }
+
+      const needed = [];
+      for (const item of items) {
+        const pId = idStr(item.productId?._id || item.productId || item.product);
+        const product = pId ? productsData.data.find((p) => idStr(p._id) === pId) : null;
+        if (!product) { needed.push({ key: null, need: Number(item.quantity), name: item.productName }); continue; }
+
+        let vKey = null;
+        if (product.variants?.length) {
+          let variant = null;
+          if (item.variantId) {
+            const vid = idStr(item.variantId._id || item.variantId);
+            variant = product.variants.find((v) => idStr(v._id) === vid);
+          }
+          if (!variant && item.sku) {
+            variant = product.variants.find((v) => normSku(v.sku) === normSku(item.sku));
+          }
+          vKey = variant ? `${product._id}::${variant._id}` : null;
+        } else {
+          vKey = `${product._id}::__root`;
+        }
+        needed.push({ key: vKey, need: Number(item.quantity) || 1, name: item.productName + (item.colorName ? ` - ${item.colorName}` : '') + (item.sizeLabel ? ` - ${item.sizeLabel}` : '') });
+      }
+
+      const canFulfill = needed.every((n) => n.key && (virtualStock[n.key] || 0) >= n.need);
+
+      if (canFulfill) {
+        rank++;
+        for (const n of needed) virtualStock[n.key] -= n.need;
+        map[order._id] = { fulfillable: true, rank, shortages: [] };
+      } else {
+        const shortages = needed
+          .filter((n) => !n.key || (virtualStock[n.key] || 0) < n.need)
+          .map((n) => ({ name: n.name, have: n.key ? (virtualStock[n.key] || 0) : 0, need: n.need }));
+        map[order._id] = { fulfillable: false, rank: null, shortages };
+      }
+    }
+    return map;
+  }, [productsData?.data, orders]);
+
+  /** Same as Map column + stock filter: open orders use stock in date order (oldest first); Livré/Annulé use shelf only */
+  const getOrderStockMapDisplay = (order) => {
+    if (stockMappingExcludedStatuses.includes((order.status || '').toLowerCase())) {
+      return getOrderStockDisplay(order);
+    }
+    const m = stockMapping[order._id];
+    if (m === undefined) return 'unknown';
+    return m.fulfillable ? 'ok' : 'out';
+  };
+
+  const stockMapLineLabel = (item) =>
+    (item.productName || '') +
+    (item.colorName ? ` - ${item.colorName}` : '') +
+    (item.sizeLabel ? ` - ${item.sizeLabel}` : '');
+
+  /** Per-line icons: match Map column for open orders; shelf check for Livré/Annulé */
+  const getLineItemStockMapAvailability = (item, order) => {
+    if (stockMappingExcludedStatuses.includes((order.status || '').toLowerCase())) {
+      return checkStockAvailability(item);
+    }
+    const m = stockMapping[order._id];
+    if (m === undefined) return checkStockAvailability(item);
+    if (m.fulfillable) return true;
+    const label = stockMapLineLabel(item);
+    const inShortage = m.shortages?.some((s) => s.name === label);
+    return inShortage ? false : true;
+  };
+
+  const allFilteredOrders = orders.filter((order) => {
+    const matchesSearch =
+      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customer?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.customer?.telephone?.includes(searchTerm) ||
+      order.items?.some(
+        (item) =>
+          item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+
+    const matchesProduct =
+      productFilter === '' ||
+      order.items?.some((item) => {
+        const pId = item.productId?._id || item.productId || item.product;
+        return pId?.toString() === productFilter;
+      });
+
+    let matchesStock = true;
+    if (stockFilter === 'available') {
+      matchesStock = getOrderStockMapDisplay(order) === 'ok';
+    } else if (stockFilter === 'unavailable') {
+      matchesStock = getOrderStockMapDisplay(order) === 'out';
+    }
+
+    return matchesSearch && matchesProduct && matchesStock;
+  });
+
+  const pagination = { page, limit, total: allFilteredOrders.length, pages: Math.ceil(allFilteredOrders.length / limit) || 1 };
+  const filteredOrders = allFilteredOrders.slice((page - 1) * limit, page * limit);
+
+  const filteredProducts = productSearch
+    ? (productsData?.data || []).filter(
+        (p) =>
+          p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+          p.sku.toLowerCase().includes(productSearch.toLowerCase())
+      )
+    : [];
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -298,6 +428,21 @@ export default function Orders() {
     },
     onError: (error) => {
       toast.error(error.response?.data?.message || 'Failed to sync status');
+    }
+  });
+
+  const shopifyOrdersSyncMutation = useMutation({
+    mutationFn: () => syncShopifyOrdersAllBatches({ batchSize: 200 }),
+    onSuccess: (r) => {
+      queryClient.invalidateQueries(['orders']);
+      queryClient.invalidateQueries(['orderStats']);
+      queryClient.invalidateQueries(['products']);
+      toast.success(
+        `Shopify orders synced: ${r.totalUpdated} updated${r.totalFailed ? `, ${r.totalFailed} failed` : ''} (${r.totalMatching} linked in DB)`
+      );
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || error.message || 'Shopify sync failed');
     }
   });
 
@@ -542,6 +687,17 @@ export default function Orders() {
             <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
             <FaPlus /> New Order
             </button>
+            {(user.role === 'admin' || user.role === 'manager') && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                title="Refresh Shopify order line items from your store (run Import Products in Shopify settings first for best results)"
+                disabled={shopifyOrdersSyncMutation.isPending}
+                onClick={() => shopifyOrdersSyncMutation.mutate()}
+              >
+                <FaSync /> {shopifyOrdersSyncMutation.isPending ? 'Syncing…' : 'Sync Shopify'}
+              </button>
+            )}
         </div>
       </div>
 
@@ -624,6 +780,18 @@ export default function Orders() {
                           ))}
                       </select>
                   </div>
+                  <div style={{ minWidth: '200px' }}>
+                      <select
+                          className="form-control"
+                          value={stockFilter}
+                          onChange={(e) => setStockFilter(e.target.value)}
+                          title="Matches the Map column: open orders use stock in date order (oldest first). Delivered/Cancelled use shelf quantities only."
+                      >
+                          <option value="">All Stock</option>
+                          <option value="available">In Stock</option>
+                          <option value="unavailable">Out of Stock</option>
+                      </select>
+                  </div>
              </div>
 
              {/* Status Tabs */}
@@ -653,6 +821,17 @@ export default function Orders() {
         </div>
       </div>
 
+      {Object.keys(stockMapping).length > 0 && (
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', padding: '10px 16px', marginBottom: '12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', fontSize: '0.9rem' }}>
+          <FaLayerGroup style={{ color: '#0284c7' }} />
+          <span><strong style={{ color: '#16a34a' }}>{Object.values(stockMapping).filter((m) => m.fulfillable).length}</strong> fulfillable</span>
+          <span><strong style={{ color: '#dc2626' }}>{Object.values(stockMapping).filter((m) => !m.fulfillable).length}</strong> insufficient stock</span>
+          <span style={{ color: '#6b7280' }}>
+            ({Object.keys(stockMapping).length} open orders in stock map, oldest first; Livré/Annulé excluded — In Stock / Out of Stock filter matches this)
+          </span>
+        </div>
+      )}
+
       <div className="card">
         <div className="table-container">
           <table className="table">
@@ -665,6 +844,8 @@ export default function Orders() {
                         onChange={toggleAllSelection}
                     />
                 </th>
+                <th>Map</th>
+                <th>Phone</th>
                 <th>Products</th>
                 <th>Customer</th>
                 <th>Items</th>
@@ -677,7 +858,7 @@ export default function Orders() {
             </thead>
             <tbody>
               {filteredOrders.length === 0 ? (
-                <tr><td colSpan="9" style={{ textAlign: 'center' }}>No orders found</td></tr>
+                <tr><td colSpan="11" style={{ textAlign: 'center' }}>No orders found</td></tr>
               ) : (
                 filteredOrders.map((order) => (
                   <tr key={order._id}>
@@ -688,11 +869,58 @@ export default function Orders() {
                             onChange={() => toggleOrderSelection(order._id)}
                         />
                     </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {(() => {
+                        const m = stockMapping[order._id];
+                        if (!m) return <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>—</span>;
+                        if (m.fulfillable) return (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: '28px', height: '28px', borderRadius: '50%',
+                            background: '#dcfce7', color: '#16a34a', fontWeight: '700', fontSize: '0.85rem',
+                            border: '2px solid #86efac'
+                          }} title={`In stock — serving order #${m.rank} (by date, oldest first)`}>
+                            {m.rank}
+                          </span>
+                        );
+                        return (
+                          <button
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: '28px', height: '28px', borderRadius: '50%',
+                              background: '#fee2e2', color: '#dc2626', fontWeight: '700', fontSize: '0.85rem',
+                              border: '2px solid #fca5a5', cursor: 'pointer'
+                            }}
+                            title="Out of stock — click for details"
+                            onClick={() => setOutOfStockOrder({ ...order, _mappingShortages: m.shortages })}
+                          >
+                            ✕
+                          </button>
+                        );
+                      })()}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: '600' }}>{order.customer?.telephone || '—'}</span>
+                        {order.customer?.telephone && (
+                          <button
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center' }}
+                            title="Copy phone number"
+                            onClick={() => {
+                              navigator.clipboard.writeText(order.customer.telephone);
+                              toast.success('Phone number copied!', { autoClose: 1500 });
+                            }}
+                          >
+                            <FaCopy size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     <td>
                         <div style={{ maxWidth: '300px' }}>
                             {order.items?.map((item, idx) => {
-                                const isAvailable = checkStockAvailability(item);
-                                return (
+                              const isAvailable = getLineItemStockMapAvailability(item, order);
+                              return (
                                 <div key={idx} style={{ fontSize: '0.85rem', marginBottom: '2px', display: 'flex', alignItems: 'center' }}>
                                     <strong>{item.productName}</strong>
                                     {item.colorName && <span className="text-gray-600 ml-1">- {item.colorName}</span>}
@@ -746,25 +974,38 @@ export default function Orders() {
                     <td>{new Date(order.createdAt).toLocaleDateString()}</td>
                     <td style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
                       {(() => {
-                        const stock = getOrderStockDisplay(order);
+                        const stock = getOrderStockMapDisplay(order);
                         if (stock === 'ok') {
                           return (
                             <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
-                              <FaCheck className="text-green-500" title="All items in stock" size={20} />
+                              <FaCheck
+                                className="text-green-500"
+                                title="In stock (same rules as Map column; delivered/cancelled orders use shelf quantities)"
+                                size={20}
+                              />
                             </span>
                           );
                         }
                         if (stock === 'out') {
+                          const m = stockMapping[order._id];
                           return (
-                            <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
-                              <FaTimes className="text-red-500" title="At least one item is out of stock" size={20} />
-                            </span>
+                            <button
+                              className="btn btn-sm"
+                              style={{ marginRight: '10px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '6px' }}
+                              title="Out of stock — click for details"
+                              onClick={() => {
+                                if (m?.shortages?.length) setOutOfStockOrder({ ...order, _mappingShortages: m.shortages });
+                                else setOutOfStockOrder(order);
+                              }}
+                            >
+                              <FaExclamationTriangle size={14} /> Out
+                            </button>
                           );
                         }
                         if (stock === 'unknown') {
                           return (
                             <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
-                              <FaQuestionCircle className="text-gray-400" title="Could not verify stock (product not loaded or variant not matched)" size={20} />
+                              <FaQuestionCircle className="text-gray-400" title="Could not verify (products loading or variant not matched)" size={20} />
                             </span>
                           );
                         }
@@ -1165,13 +1406,80 @@ export default function Orders() {
         </div>
       </Modal>
 
+      <Modal isOpen={!!outOfStockOrder} onClose={() => setOutOfStockOrder(null)} title={`Out of Stock — ${outOfStockOrder?.orderNumber || ''}`}>
+        {outOfStockOrder && (
+          <div>
+            <p style={{ marginBottom: '12px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+              Items that are out of stock or have insufficient quantity{outOfStockOrder._mappingShortages ? ' (after earlier orders by date are served first)' : ''}:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {outOfStockOrder._mappingShortages ? (
+                outOfStockOrder._mappingShortages.map((s, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' }}>
+                    <div><strong>{s.name}</strong></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                      <span style={{ fontSize: '0.85rem' }}>
+                        <span style={{ color: '#dc2626', fontWeight: '700' }}>{s.have}</span>
+                        <span style={{ color: '#6b7280' }}> / {s.need} needed</span>
+                      </span>
+                      <FaTimes className="text-red-500" size={14} />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <>
+                  {outOfStockOrder.items?.map((item, idx) => {
+                    const detail = getItemStockDetail(item);
+                    if (detail.available !== false) return null;
+                    return (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' }}>
+                        <div>
+                          <strong>{item.productName}</strong>
+                          {item.colorName && <span style={{ color: '#6b7280', marginLeft: '6px' }}>- {item.colorName}</span>}
+                          {item.sizeLabel && <span style={{ color: '#6b7280', marginLeft: '6px' }}>- {item.sizeLabel}</span>}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                          <span style={{ fontSize: '0.85rem' }}>
+                            <span style={{ color: '#dc2626', fontWeight: '700' }}>{detail.have ?? '?'}</span>
+                            <span style={{ color: '#6b7280' }}> / {detail.need} needed</span>
+                          </span>
+                          <FaTimes className="text-red-500" size={14} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {outOfStockOrder.items?.every((item) => getItemStockDetail(item).available !== false) && (
+                    <p style={{ textAlign: 'center', color: '#6b7280' }}>No out-of-stock items found.</p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title={`Order ${selectedOrder?.orderNumber || ''}`}>
         {selectedOrder && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-              <span className={`badge ${getStatusBadge(selectedOrder.status)}`}>
-                {selectedOrder.status}
-              </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span className={`badge ${getStatusBadge(selectedOrder.status)}`}>
+                  {selectedOrder.status}
+                </span>
+                <span style={{ fontFamily: 'monospace', fontWeight: '600', fontSize: '0.95rem', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  {selectedOrder.orderNumber}
+                  <button
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--text-secondary)', display: 'inline-flex' }}
+                    title="Copy order number"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedOrder.orderNumber);
+                      toast.success('Order number copied!', { autoClose: 1500 });
+                    }}
+                  >
+                    <FaCopy size={12} />
+                  </button>
+                </span>
+              </div>
               <span>{new Date(selectedOrder.createdAt).toLocaleString()}</span>
             </div>
 
@@ -1216,8 +1524,21 @@ export default function Orders() {
             )}
 
             <h4 style={{ marginTop: '15px' }}>Items</h4>
+            {(() => {
+              const m = stockMapping[selectedOrder._id];
+              if (m && !stockMappingExcludedStatuses.includes((selectedOrder.status || '').toLowerCase())) {
+                return (
+                  <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '10px' }}>
+                    {m.fulfillable
+                      ? `In stock for this order (serving order #${m.rank} by date).`
+                      : 'Out of stock: not enough left after earlier orders — lines with ✕ are short.'}
+                  </p>
+                );
+              }
+              return null;
+            })()}
             {selectedOrder.items?.map((item, idx) => {
-              const isAvailable = checkStockAvailability(item);
+              const isAvailable = getLineItemStockMapAvailability(item, selectedOrder);
               return (
               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

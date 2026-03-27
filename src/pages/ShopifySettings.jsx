@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api';
+import api, { syncShopifyOrdersAllBatches } from '../services/api';
 import { toast } from 'react-toastify';
 import {
   FaShopify, FaSave, FaFlask, FaCopy, FaToggleOn, FaToggleOff,
@@ -19,7 +19,8 @@ const ShopifySettings = () => {
     hasAccessToken: false,
     clientId: '',
     hasOAuthCredentials: false,
-    hasClientSecret: false
+    hasClientSecret: false,
+    requiredAdminApiScopes: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,6 +35,12 @@ const ShopifySettings = () => {
 
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState(null);
+  const [resyncing, setResyncing] = useState(false);
+  const [resyncResults, setResyncResults] = useState(null);
+  const [resyncSkip, setResyncSkip] = useState(0);
+  const [resyncLimit, setResyncLimit] = useState(100);
+  const [resyncUpdateCustomer, setResyncUpdateCustomer] = useState(false);
+  const [fullSyncing, setFullSyncing] = useState(false);
   const [categories, setCategories] = useState([]);
   const [rayons, setRayons] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -140,6 +147,73 @@ const ShopifySettings = () => {
     }
   };
 
+  const handleResyncOrders = async () => {
+    setResyncing(true);
+    setResyncResults(null);
+    try {
+      const skip = Math.max(0, parseInt(String(resyncSkip), 10) || 0);
+      const limit = Math.min(500, Math.max(1, parseInt(String(resyncLimit), 10) || 100));
+      const { data } = await api.post('/webhooks/shopify/resync-orders', {
+        skip,
+        limit,
+        updateCustomer: resyncUpdateCustomer
+      });
+      setResyncResults(data.data);
+      toast.success(data.message);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Resync failed');
+    } finally {
+      setResyncing(false);
+    }
+  };
+
+  /** Import products from Shopify, then resync every linked order in batches. */
+  const handleSyncAllData = async () => {
+    if (!settings.hasAccessToken) {
+      toast.error('Save your Shopify Admin API token first, then try again.');
+      return;
+    }
+    setFullSyncing(true);
+    setImportResults(null);
+    setResyncResults(null);
+    try {
+      const importPayload = {};
+      if (selectedCategory) importPayload.categoryId = selectedCategory;
+      if (selectedRayon) importPayload.rayonId = selectedRayon;
+
+      toast.info('Step 1/2: Importing products from Shopify…');
+      const importRes = await api.post('/webhooks/shopify/import-products', importPayload);
+      setImportResults(importRes.data.data);
+      toast.success(importRes.data.message || 'Products imported');
+
+      toast.info('Step 2/2: Resyncing all Shopify orders…');
+      const agg = await syncShopifyOrdersAllBatches({
+        updateCustomer: resyncUpdateCustomer,
+        batchSize: 200,
+        onBatch: (r) => setResyncResults({ ...r })
+      });
+      setResyncResults({
+        totalMatching: agg.totalMatching,
+        skip: agg.totalMatching,
+        limit: 200,
+        processed:
+          agg.totalUpdated + agg.totalFailed + agg.totalSkipped,
+        updated: agg.totalUpdated,
+        failed: agg.totalFailed,
+        skipped: agg.totalSkipped,
+        errors: agg.errors.slice(0, 80)
+      });
+      const ir = importRes.data?.data || {};
+      toast.success(
+        `Sync complete: ${agg.totalUpdated} order(s) updated · ${ir.created ?? 0} products created · ${ir.updated ?? 0} products refreshed in catalog`
+      );
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message || 'Sync failed');
+    } finally {
+      setFullSyncing(false);
+    }
+  };
+
   const copyWebhookUrl = () => {
     navigator.clipboard.writeText(settings.webhookUrl);
     toast.info('Webhook URL copied to clipboard');
@@ -188,6 +262,36 @@ const ShopifySettings = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Shopify Integration</h1>
           <p className="text-gray-500">Connect your Shopify store to sync orders and products</p>
+        </div>
+      </div>
+
+      {/* One-click sync: products + all orders */}
+      <div className="rounded-xl border-2 border-teal-200 bg-gradient-to-r from-teal-50 to-emerald-50 p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Sync data from Shopify</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Imports / updates products (using category & rayon below), then refreshes <strong>all</strong> Shopify-linked orders so line items match your catalog. This can take a minute on large stores.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSyncAllData}
+            disabled={fullSyncing || importing || resyncing || !settings.hasAccessToken}
+            className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white shadow-md transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {fullSyncing ? (
+              <>
+                <FaSyncAlt className="animate-spin" />
+                Syncing…
+              </>
+            ) : (
+              <>
+                <FaSyncAlt className="text-lg" />
+                Sync data
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -486,6 +590,95 @@ const ShopifySettings = () => {
         )}
       </div>
 
+      {/* Resync orders — fix line items on orders imported before ID fix */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+        <div className="flex items-center gap-2">
+          <FaSyncAlt className="text-teal-600" />
+          <h3 className="font-semibold text-gray-900 text-lg">Resync Shopify orders</h3>
+        </div>
+        <p className="text-sm text-gray-500">
+          Fetches each order again from Shopify (Admin API) and rebuilds <strong>line items</strong>, totals, and payment status using your current catalog (same logic as new webhooks).
+          Use this after <strong>Import All Products</strong> so variant/product IDs are correct. Oldest orders are processed first.
+          If you have many orders, run multiple times with <strong>Skip</strong> set to the previous batch size (e.g. 0, then 100, then 200).
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Skip (offset)</label>
+            <input
+              type="number"
+              min={0}
+              value={resyncSkip}
+              onChange={(e) => setResyncSkip(e.target.value === '' ? 0 : Number(e.target.value))}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Limit (max 500)</label>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={resyncLimit}
+              onChange={(e) => setResyncLimit(e.target.value === '' ? 100 : Number(e.target.value))}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={resyncUpdateCustomer}
+                onChange={(e) => setResyncUpdateCustomer(e.target.checked)}
+                className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              />
+              Also refresh customer from Shopify
+            </label>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleResyncOrders}
+          disabled={resyncing || !settings.hasAccessToken}
+          className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50"
+        >
+          {resyncing ? (
+            <>
+              <FaSyncAlt className="animate-spin" />
+              Resyncing orders…
+            </>
+          ) : (
+            <>
+              <FaSyncAlt />
+              Resync orders (batch)
+            </>
+          )}
+        </button>
+
+        {resyncResults && (
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-2 text-sm">
+            <h4 className="font-semibold text-gray-800">Resync results</h4>
+            <p className="text-gray-600">
+              Shopify-linked orders in DB: <strong>{resyncResults.totalMatching}</strong>
+              {' · '}Updated: <strong className="text-teal-700">{resyncResults.updated}</strong>
+              {' · '}Failed: <strong className="text-red-600">{resyncResults.failed}</strong>
+              {' · '}Skipped (no lines): <strong>{resyncResults.skipped}</strong>
+            </p>
+            <p className="text-xs text-gray-500">
+              Batch: skip {resyncResults.skip}, limit {resyncResults.limit}, processed {resyncResults.processed}
+            </p>
+            {resyncResults.errors?.length > 0 && (
+              <div className="max-h-36 overflow-y-auto space-y-1 mt-2">
+                {resyncResults.errors.map((err, i) => (
+                  <p key={i} className="text-xs text-red-700 bg-red-50 px-2 py-1 rounded">
+                    <strong>{err.orderNumber || '—'}</strong>: {err.error}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Webhook URL */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <h3 className="font-semibold text-gray-900 text-lg">Webhook URL</h3>
@@ -557,9 +750,26 @@ const ShopifySettings = () => {
 
         <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
           <p className="text-sm text-purple-800">
-            <strong>Product Import:</strong> To import products you need an <strong>Admin API Access Token</strong>.
-            Go to <strong>Shopify Admin</strong> &gt; <strong>Settings</strong> &gt; <strong>Apps and sales channels</strong> &gt; <strong>Develop apps</strong> &gt;
-            Create an app &gt; Configure <strong>Admin API scopes</strong> (enable <code>read_products</code>) &gt; Install &gt; Copy the <strong>Access Token</strong>.
+            <strong>Admin API token scopes:</strong> Open your custom app → <strong>Configuration</strong> →{' '}
+            <strong>Admin API integration</strong> → <strong>Admin API access scopes</strong> and enable at least:{' '}
+            <code className="rounded bg-purple-100 px-1">read_products</code>,{' '}
+            <code className="rounded bg-purple-100 px-1">read_inventory</code>, and{' '}
+            <code className="rounded bg-purple-100 px-1">read_orders</code>{' '}
+            (<strong>read_orders</strong> is required for <strong>Sync data</strong>, order resync, and pulling orders from Shopify; without it Shopify returns “merchant approval for read_orders”).
+            Then <strong>Save</strong>, click <strong>Install app</strong>, approve the permissions, and copy the new <strong>Admin API access token</strong> here (or use <strong>Connect with Shopify</strong>, which requests the same scopes).
+          </p>
+          {settings.requiredAdminApiScopes && (
+            <p className="mt-2 text-xs text-purple-700 font-mono break-all">
+              OAuth scope string: {settings.requiredAdminApiScopes}
+            </p>
+          )}
+        </div>
+
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm text-amber-950">
+            <strong>Already connected but see a read_orders error?</strong> Your token was probably created before{' '}
+            <code className="bg-amber-100 px-1 rounded">read_orders</code> was enabled. Add the scope in Shopify,
+            reinstall the app, then paste the <strong>new</strong> token and <strong>Save Settings</strong> (or run <strong>Connect with Shopify</strong> again).
           </p>
         </div>
 

@@ -56,4 +56,39 @@ export const organizationAPI = {
   updateMemberRole: (orgId, userId, role) => api.put(`/organizations/${orgId}/members/${userId}/role`, { role })
 };
 
+/**
+ * Resync all Shopify-linked orders in batches (catalog line items + totals from Shopify).
+ * Run after “Import products” so IDs match.
+ */
+export async function syncShopifyOrdersAllBatches({ updateCustomer = false, batchSize = 200, onBatch } = {}) {
+  const cap = Math.min(500, Math.max(1, batchSize));
+  let skip = 0;
+  let totalUpdated = 0;
+  let totalFailed = 0;
+  let totalSkipped = 0;
+  let totalMatching = 0;
+  const errors = [];
+
+  while (true) {
+    const { data } = await api.post('/webhooks/shopify/resync-orders', {
+      skip,
+      limit: cap,
+      updateCustomer
+    });
+    const r = data.data;
+    if (totalMatching === 0) totalMatching = r.totalMatching ?? 0;
+    totalUpdated += r.updated;
+    totalFailed += r.failed;
+    totalSkipped += r.skipped;
+    if (Array.isArray(r.errors)) errors.push(...r.errors);
+    onBatch?.(r);
+    const processed = r.processed ?? 0;
+    skip += processed;
+    if (processed === 0) break;
+    if (skip >= totalMatching) break;
+  }
+
+  return { totalMatching, totalUpdated, totalFailed, totalSkipped, errors };
+}
+
 export default api;

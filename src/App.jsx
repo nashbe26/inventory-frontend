@@ -16,10 +16,13 @@ import ProductForm from './pages/ProductForm'
 import ProductDetails from './pages/ProductDetails'
 import BarcodeScanner from './pages/BarcodeScanner'
 import ReturnScanner from './pages/ReturnScanner'
+import DispatchScan from './pages/DispatchScan'
+import PrepareScan from './pages/PrepareScan'
 import History from './pages/History'
 import BulkGeneration from './pages/BulkGeneration'
 import Orders from './pages/Orders'
 import Analytics from './pages/Analytics'
+import OrderAnalytics from './pages/OrderAnalytics'
 import Expenses from './pages/Expenses'
 import SupplierExpenses from './pages/SupplierExpenses'
 import UserExpensesReport from './pages/UserExpensesReport'
@@ -124,6 +127,8 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="scanner" element={<BarcodeScanner />} />
           <Route path="scanner-return" element={<ReturnScanner />} />
+          <Route path="prepare-scan" element={<PrepareScan />} />
+          <Route path="dispatch-scan" element={<DispatchScan />} />
           <Route path="history" element={<History />} />
 
           <Route path="categories" element={<Categories />} />
@@ -137,6 +142,7 @@ function App() {
           <Route path="products/edit/:id" element={<ProductForm />} />
           <Route path="products/:id" element={<ProductDetails />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="order-analytics" element={<OrderAnalytics />} />
           <Route path="pickups" element={<Pickups />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="expenses" element={<Expenses />} />

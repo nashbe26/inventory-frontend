@@ -1,33 +1,62 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle, FaCopy, FaExclamationTriangle, FaLayerGroup } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaClipboardList, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle, FaCopy, FaExclamationTriangle, FaLayerGroup } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import api, { syncShopifyOrdersAllBatches } from '../services/api';
 import Modal from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeCanvas } from 'qrcode.react';
 
-const statuses = ['En Attente', 'Confirmé', 'Préparé', 'Expédié', 'Livré', 'Annulé'];
+const statuses = [
+  'En Attente',
+  'Confirmé',
+  'Préparé',
+  'Prêt à préparer',
+  'Remis au transporteur',
+  'Expédié',
+  'Livré',
+  'Annulé',
+  'NRP'
+];
 
 const statusGroups = [
   { label: 'All', value: '', color: 'bg-gray-100 text-gray-800' },
   { label: 'Pending', value: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
   { label: 'Confirmed', value: 'Confirmed', color: 'bg-purple-100 text-purple-800' },
   { label: 'Processing', value: 'Processing', color: 'bg-blue-100 text-blue-800' },
+  { label: 'Prêt à préparer', value: 'Prêt à préparer', color: 'bg-teal-100 text-teal-900' },
+  { label: 'Remis transporteur', value: 'Remis au transporteur', color: 'bg-amber-100 text-amber-900' },
   { label: 'Completed', value: 'Completed', color: 'bg-green-100 text-green-800' },
   { label: 'Cancelled', value: 'Cancelled', color: 'bg-red-100 text-red-800' },
   { label: 'NRP', value: 'NRP', color: 'bg-gray-300 text-gray-800' }
 ];
 
+/** Canonical labels: DB may still store feminine / lowercase variants. */
+const canonicalStatusLabel = (status) => {
+  if (!status) return '';
+  if (status === 'Confirmée' || status === 'confirmée' || status === 'confirmé') return 'Confirmé';
+  if (status === 'Livrée') return 'Livré';
+  if (status === 'Annulée') return 'Annulé';
+  return status;
+};
+
 const getStatusBadge = (status) => {
     if (!status) return 'badge-secondary';
     switch (status.toLowerCase()) {
         case 'payé': return 'badge-success';
-        case 'confirmé': return 'badge-warning'; // Note: Frontend uses warning for confirmed in badge logic? Confusing but keeping consistency or changing? Let's keep existing and add NRP
-        case 'préparé': return 'badge-info'; 
+        case 'confirmé':
+        case 'confirmée':
+          return 'badge-warning';
+        case 'préparé': return 'badge-info';
+        case 'prêt à préparer': return 'badge-teal';
+        case 'remis au transporteur': return 'badge-warning';
         case 'expédié': return 'badge-primary';
-        case 'livré': return 'badge-success';
-        case 'annulé': return 'badge-danger';
+        case 'livré':
+        case 'livrée':
+          return 'badge-success';
+        case 'annulé':
+        case 'annulée':
+          return 'badge-danger';
         case 'nrp': return 'badge-secondary';
         default: return 'badge-secondary';
     }
@@ -35,7 +64,7 @@ const getStatusBadge = (status) => {
 
 const tunisiaGovernorates = [
   'Ariana', 'Béja', 'Ben Arous', 'Bizerte', 'Gabès', 'Gafsa', 'Jendouba', 'Kairouan',
-  'Kasserine', 'Kébili', 'Le Kef', 'Mahdia', 'Le Manouba', 'Médenine', 'Monastir', 'Nabeul',
+  'Kasserine', 'Kébili', 'Le Kef', 'Mahdia', 'La Manouba', 'Médenine', 'Monastir', 'Nabeul',
   'Sfax', 'Sidi Bouzid', 'Siliana', 'Sousse', 'Tataouine', 'Tozeur', 'Tunis', 'Zaghouan'
 ];
 
@@ -458,7 +487,8 @@ export default function Orders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['orders']);
-      toast.success('Order sent to delivery service');
+      queryClient.invalidateQueries(['orderStats']);
+      toast.success('First Delivery OK — statut « Prêt à préparer »');
     },
     onError: (error) => {
       toast.error(error.response?.data?.message || 'Failed to send order to delivery');
@@ -528,12 +558,21 @@ export default function Orders() {
       return res.data;
     },
     onSuccess: (data) => {
-        queryClient.invalidateQueries(['orders']);
-        toast.success(`Sent ${data.count} orders to delivery`);
-        setSelectedOrderIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orderStats'] });
+      const saved = data.savedWithBarcode ?? data.count;
+      const total = data.count ?? 0;
+      if (data.saveErrors?.length) {
+        toast.warning(
+          `First Delivery: ${saved}/${total} commande(s) avec code-barres — statut Prêt à préparer. Certaines sans code — voir les logs serveur.`
+        );
+      } else {
+        toast.success(`${saved} commande(s) — First Delivery OK, statut Prêt à préparer`);
+      }
+      setSelectedOrderIds(new Set());
     },
     onError: (error) => {
-        toast.error(error.response?.data?.message || 'Failed to send bulk orders');
+      toast.error(error.response?.data?.message || 'Failed to send bulk orders');
     }
   });
 
@@ -579,6 +618,40 @@ export default function Orders() {
     onError: (error) => {
         console.error(error);
         toast.error('Failed to print orders');
+    }
+  });
+
+  const printPackagingManifestMutation = useMutation({
+    mutationFn: async (ids) => {
+      const res = await api.post(
+        '/orders/packaging-manifest',
+        { orderIds: ids },
+        { responseType: 'blob' }
+      );
+      return res.data;
+    },
+    onSuccess: (blob) => {
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `manifest-preparation-${Date.now()}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Manifest de préparation généré');
+    },
+    onError: (error) => {
+      const d = error.response?.data;
+      let msg = d?.message;
+      if (typeof d === 'string') {
+        try {
+          msg = JSON.parse(d).message;
+        } catch {
+          msg = d;
+        }
+      }
+      toast.error(msg || 'Échec du manifest de préparation');
     }
   });
 
@@ -719,9 +792,9 @@ export default function Orders() {
             {selectedOrderIds.size > 0 && (
                 <>
                     <button className="btn btn-secondary" onClick={() => {
-                        const confirmedOrders = orders.filter(o => selectedOrderIds.has(o._id) && o.status?.toLowerCase() === 'confirmée');
+                        const confirmedOrders = orders.filter(o => selectedOrderIds.has(o._id) && ['confirmé', 'confirmée'].includes(o.status?.toLowerCase()));
                         if (confirmedOrders.length === 0) {
-                             toast.warning("Only 'confirmée' orders can be sent to delivery.");
+                             toast.warning("Only 'confirmé' orders can be sent to delivery.");
                              return;
                         }
                         if (confirmedOrders.length < selectedOrderIds.size) {
@@ -731,6 +804,41 @@ export default function Orders() {
                     }}>
                         <FaTruck /> Send Bulk ({selectedOrderIds.size})
                     </button>
+                    {(user.role === 'admin' || user.role === 'manager' || user.role === 'user') && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        title="PDF pour l’équipe préparation : articles + code-barres First Delivery à scanner"
+                        disabled={printPackagingManifestMutation.isPending}
+                        onClick={() => {
+                          const withBc = orders.filter(
+                            (o) =>
+                              (selectedOrderIds.has(o._id) ||
+                                selectedOrderIds.has(String(o._id))) &&
+                              o.deliveryBarcode
+                          );
+                          if (withBc.length === 0) {
+                            toast.warning(
+                              'Sélectionnez des commandes déjà envoyées à First Delivery (code-barres requis pour le manifest).'
+                            );
+                            return;
+                          }
+                          if (withBc.length < selectedOrderIds.size) {
+                            toast.info(
+                              `${withBc.length} commande(s) avec code-barres dans le PDF (${selectedOrderIds.size - withBc.length} sans code ignorée(s)).`
+                            );
+                          }
+                          printPackagingManifestMutation.mutate(
+                            withBc.map((o) => String(o._id))
+                          );
+                        }}
+                      >
+                        <FaClipboardList />{' '}
+                        {printPackagingManifestMutation.isPending
+                          ? 'Manifest…'
+                          : 'Manifest préparation'}
+                      </button>
+                    )}
                     {(user.role === 'admin' || user.role === 'manager') && (
                         <>
                            <button className="btn btn-secondary" onClick={() => printOrdersMutation.mutate(Array.from(selectedOrderIds))} disabled={printOrdersMutation.isPending}>
@@ -789,6 +897,20 @@ export default function Orders() {
              {statsData?.processing?.count || 0}
           </div>
            <div className="stat-label">{statsData?.processing?.amount?.toFixed(2)} dt</div>
+        </div>
+        <div className="stat-card">
+          <h3>Prêt à préparer</h3>
+          <div className="stat-value" style={{ color: '#0f766e' }}>
+            {statsData?.readyToPrepare?.count ?? 0}
+          </div>
+          <div className="stat-label">{(statsData?.readyToPrepare?.amount ?? 0).toFixed(2)} dt</div>
+        </div>
+        <div className="stat-card">
+          <h3>Remis transporteur</h3>
+          <div className="stat-value" style={{ color: '#b45309' }}>
+            {statsData?.atCarrier?.count ?? 0}
+          </div>
+          <div className="stat-label">{(statsData?.atCarrier?.amount ?? 0).toFixed(2)} dt</div>
         </div>
         <div className="stat-card">
           <h3>Completed</h3>
@@ -1011,17 +1133,17 @@ export default function Orders() {
                         {(user.role === 'admin' || user.role === 'manager') ? (
                           <select
                             className={`badge ${getStatusBadge(order.status)}`}
-                            value={order.status}
+                            value={canonicalStatusLabel(order.status)}
                             onChange={(e) => updateStatusMutation.mutate({ id: order._id, status: e.target.value })}
                             style={{ cursor: 'pointer', border: 'none' }}
                           >
-                            {statuses.map(status => (
+                            {statuses.map((status) => (
                               <option key={status} value={status}>{status}</option>
                             ))}
                           </select>
                         ) : (
                           <span className={`badge ${getStatusBadge(order.status)}`}>
-                              {order.status}
+                              {canonicalStatusLabel(order.status)}
                           </span>
                         )}
                         {order.isExchange && (
@@ -1099,7 +1221,11 @@ export default function Orders() {
 
                       {(user.role === 'admin' || user.role === 'manager') && (
                           <>
-                              {!order.deliveryBarcode && order.status?.toLowerCase() === 'confirmé' ? (
+                              {!order.deliveryBarcode &&
+                              (order.status === 'Préparé' ||
+                                order.status === 'Confirmé' ||
+                                order.status === 'Confirmée' ||
+                                order.status?.toLowerCase() === 'confirmé') ? (
                                   <button
                                     className="btn btn-sm btn-success"
                                     onClick={() => {
@@ -1160,7 +1286,7 @@ export default function Orders() {
                           </>
                       )}
 
-                      {user.role === 'supplier' && order.status === 'Confirmé' && (
+                      {user.role === 'supplier' && (order.status === 'Confirmé' || order.status === 'Confirmée') && (
                           <button
                             className="btn btn-sm btn-success"
                             onClick={() => updateStatusMutation.mutate({ id: order._id, status: 'Préparé' })}
@@ -1517,10 +1643,28 @@ export default function Orders() {
                 onChange={(e) => setCustomer({ ...customer, ville: e.target.value })} />
 
               <input type="tel" className="form-control" placeholder="Phone" value={customer.telephone}
-                onChange={(e) => setCustomer({ ...customer, telephone: e.target.value })} />
+                onChange={(e) => {
+                  let val = e.target.value.replace(/\D/g, ''); // keep only numbers
+                  if (val.startsWith('216')) {
+                    val = val.slice(3);
+                  }
+                  if (val.length > 8) {
+                    val = val.slice(0, 8);
+                  }
+                  setCustomer({ ...customer, telephone: val });
+                }} />
                 
               <input type="tel" className="form-control" placeholder="Phone 2 (Optional)" value={customer.telephone2}
-                onChange={(e) => setCustomer({ ...customer, telephone2: e.target.value })} />
+                onChange={(e) => {
+                  let val = e.target.value.replace(/\D/g, '');
+                  if (val.startsWith('216')) {
+                    val = val.slice(3);
+                  }
+                  if (val.length > 8) {
+                    val = val.slice(0, 8);
+                  }
+                  setCustomer({ ...customer, telephone2: val });
+                }} />
                 
               <input type="text" className="form-control" placeholder="Address" value={customer.adresse} style={{gridColumn: 'span 2'}}
                 onChange={(e) => setCustomer({ ...customer, adresse: e.target.value })} />
@@ -1651,7 +1795,7 @@ export default function Orders() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span className={`badge ${getStatusBadge(selectedOrder.status)}`}>
-                  {selectedOrder.status}
+                  {canonicalStatusLabel(selectedOrder.status)}
                 </span>
                 <span style={{ fontFamily: 'monospace', fontWeight: '600', fontSize: '0.95rem', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                   {selectedOrder.orderNumber}

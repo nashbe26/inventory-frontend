@@ -517,6 +517,11 @@ textarea.form-control {
   color: #1e40af;
 }
 
+.badge-teal {
+  background-color: #ccfbf1;
+  color: #115e59;
+}
+
 .badge-secondary {
   background-color: #f3f4f6;
   color: #374151;

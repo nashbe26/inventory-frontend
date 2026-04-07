@@ -27,7 +27,9 @@ import {
   FaBars,
   FaTimes,
   FaQrcode,
-  FaShopify
+  FaShopify,
+  FaBoxOpen,
+  FaChartPie
 } from 'react-icons/fa'
 
 export default function Layout() {
@@ -127,6 +129,18 @@ export default function Layout() {
                     </NavLink>
                   </li>
                   <li>
+                    <NavLink to="/prepare-scan" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaBoxOpen /> Préparation (scan)
+                    </NavLink>
+                  </li>
+                  {(user?.role === 'admin' || user?.role === 'manager') && (
+                    <li>
+                      <NavLink to="/dispatch-scan" className={({ isActive }) => isActive ? 'active' : ''}>
+                        <FaTruck /> Expédition (scan)
+                      </NavLink>
+                    </li>
+                  )}
+                  <li>
                     <NavLink to="/history" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaHistory /> Scan History
                     </NavLink>
@@ -134,6 +148,11 @@ export default function Layout() {
                   <li>
                     <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaShoppingCart /> Orders
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink to="/order-analytics" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaChartPie /> Order analytics
                     </NavLink>
                   </li>
                   <li>

@@ -70,6 +70,9 @@ const tunisiaGovernorates = [
 
 export default function Orders() {
   const { user } = useAuth();
+  const isStaff = user?.role === 'staff';
+  const isManagerish = user?.role === 'admin' || user?.role === 'manager';
+  const canOpsOrders = isManagerish || isStaff;
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -103,7 +106,7 @@ export default function Orders() {
     queryFn: async () => {
         const res = await api.get('/orders/stats');
         return res.data?.data; // { total, pending, processing, completed, cancelled }
-    }
+    },
   });
 
   const { data: ordersData, isLoading } = useQuery({
@@ -138,7 +141,7 @@ export default function Orders() {
         // Extract users from stats
         return res.data.map(stat => stat.user);
     },
-    enabled: isBordereauModalOpen // Only fetch when modal opens
+    enabled: isBordereauModalOpen && isManagerish
   });
 
   const orders = ordersData?.data || [];
@@ -804,7 +807,7 @@ export default function Orders() {
                     }}>
                         <FaTruck /> Send Bulk ({selectedOrderIds.size})
                     </button>
-                    {(user.role === 'admin' || user.role === 'manager' || user.role === 'user') && (
+                    {canOpsOrders && (
                       <button
                         type="button"
                         className="btn btn-secondary"
@@ -839,14 +842,16 @@ export default function Orders() {
                           : 'Manifest préparation'}
                       </button>
                     )}
-                    {(user.role === 'admin' || user.role === 'manager') && (
+                    {canOpsOrders && (
                         <>
                            <button className="btn btn-secondary" onClick={() => printOrdersMutation.mutate(Array.from(selectedOrderIds))} disabled={printOrdersMutation.isPending}>
                                 <FaPrint /> {printOrdersMutation.isPending ? 'Printing...' : `Print Invoices (${selectedOrderIds.size})`}
                            </button>
+                           {isManagerish && (
                            <button className="btn btn-secondary" onClick={() => setIsBordereauModalOpen(true)}>
                                 <FaFileAlt /> Create Bordereau ({selectedOrderIds.size})
                            </button>
+                           )}
                         </>
                     )}
                     <button className="btn btn-secondary" onClick={() => requestPickupMutation.mutate(Array.from(selectedOrderIds))}>
@@ -1130,7 +1135,7 @@ export default function Orders() {
                     <td><strong>{order.total?.toFixed(2)} dt</strong></td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
-                        {(user.role === 'admin' || user.role === 'manager') ? (
+                        {canOpsOrders ? (
                           <select
                             className={`badge ${getStatusBadge(order.status)}`}
                             value={canonicalStatusLabel(order.status)}
@@ -1219,7 +1224,7 @@ export default function Orders() {
                         <FaQrcode />
                       </button>
 
-                      {(user.role === 'admin' || user.role === 'manager') && (
+                      {canOpsOrders && (
                           <>
                               {!order.deliveryBarcode &&
                               (order.status === 'Préparé' ||
@@ -1274,6 +1279,7 @@ export default function Orders() {
                                 <FaEdit />
                               </button>
 
+                              {isManagerish && (
                               <button
                                 className="btn btn-sm btn-danger"
                                 onClick={() => {
@@ -1283,6 +1289,7 @@ export default function Orders() {
                               >
                                 <FaTrash />
                               </button>
+                              )}
                           </>
                       )}
 

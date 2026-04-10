@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import PrivateRoute from './components/PrivateRoute'
 import Login from './pages/Login'
@@ -43,69 +43,16 @@ import Bordereaux from './pages/Bordereaux'
 import ClaimOrder from './pages/ClaimOrder'
 import ClaimBordereau from './pages/ClaimBordereau'
 import ShopifySettings from './pages/ShopifySettings'
-import { useEffect } from 'react'
-import { io } from 'socket.io-client'
-import { toast, ToastContainer } from 'react-toastify'
+import TimeClock from './pages/TimeClock'
+import TeamChat from './pages/TeamChat'
+import { ToastContainer } from 'react-toastify'
+import { SocketProvider } from './contexts/SocketContext'
 import 'react-toastify/dist/ReactToastify.css'
-
-// Socket Manager Component
-const SocketManager = () => {
-    const { user } = useAuth();
-
-    useEffect(() => {
-        if (!user) return;
-
-        // Initialize Socket
-        // Adjust URL for production/dev
-        const newSocket = io(import.meta.env.VITE_API_URL || 'https://tndeals.store'); 
-
-        newSocket.on('connect', () => {
-            console.log('Socket Connected');
-            
-            // Join Rooms based on Role
-            if (user.role === 'admin' || user.role === 'manager') {
-                newSocket.emit('joinRoom', 'admin_group');
-            } 
-            
-            if (user.role === 'supplier' && user.fournisseurId) {
-                newSocket.emit('joinRoom', `supplier_${user.fournisseurId}`);
-            }
-
-            if (user.role === 'delivery_man') {
-                newSocket.emit('joinRoom', 'delivery_group');
-            }
-
-            if (user.organization) {
-                 newSocket.emit('joinRoom', `org_${user.organization._id || user.organization}`);
-            }
-        });
-
-        // Listen for Events
-        newSocket.on('newOrder', (data) => {
-            toast.info(data.message, { autoClose: 10000 });
-            // Optionally play sound
-        });
-
-        newSocket.on('orderReady', (data) => {
-            toast.success(data.message, { autoClose: 10000 });
-        });
-
-        newSocket.on('orderStatusUpdated', (data) => {
-            toast.info(data.message);
-        });
-
-        return () => {
-            newSocket.disconnect();
-        };
-    }, [user]);
-
-    return null;
-};
 
 function App() {
   return (
     <AuthProvider>
-      <SocketManager />
+      <SocketProvider>
       <ToastContainer position="top-right" />
       <Routes>
         {/* Public Routes */}
@@ -125,6 +72,7 @@ function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="time-clock" element={<TimeClock />} />
           <Route path="scanner" element={<BarcodeScanner />} />
           <Route path="scanner-return" element={<ReturnScanner />} />
           <Route path="prepare-scan" element={<PrepareScan />} />
@@ -162,11 +110,13 @@ function App() {
           <Route path="delivery-team" element={<DeliveryTeam />} />
           <Route path="bordereaux" element={<Bordereaux />} />
           <Route path="shopify-settings" element={<ShopifySettings />} />
+          <Route path="chat" element={<TeamChat />} />
         </Route>
 
         {/* Catch all - redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </SocketProvider>
     </AuthProvider>
   )
 }

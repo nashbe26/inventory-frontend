@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { 
   FaHome, 
@@ -29,12 +29,48 @@ import {
   FaQrcode,
   FaShopify,
   FaBoxOpen,
-  FaChartPie
+  FaChartPie,
+  FaClock,
+  FaComments
 } from 'react-icons/fa'
+
+function staffPathAllowed(pathname) {
+  const prefixes = [
+    '/products',
+    '/orders',
+    '/order-analytics',
+    '/scanner',
+    '/scanner-return',
+    '/prepare-scan',
+    '/history',
+    '/pickups',
+    '/categories',
+    '/colors',
+    '/sizes',
+    '/rayons',
+    '/materials',
+    '/fournisseurs',
+    '/profile',
+    '/chat',
+    '/time-clock'
+  ];
+  return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const location = useLocation();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  if (user?.role === 'staff') {
+    const p = location.pathname;
+    if (p === '/') {
+      return <Navigate to="/scanner" replace />;
+    }
+    if (!staffPathAllowed(p)) {
+      return <Navigate to="/scanner" replace />;
+    }
+  }
   
   const [expandedGroups, setExpandedGroups] = useState({
     operations: true,
@@ -79,6 +115,11 @@ export default function Layout() {
             {user?.role === 'delivery_man' ? (
                 <>
                     <li>
+                        <NavLink to="/time-clock" className={({ isActive }) => isActive ? 'active' : ''}>
+                          <FaClock /> Time clock
+                        </NavLink>
+                    </li>
+                    <li>
                         <NavLink to="/delivery-dashboard" className={({ isActive }) => isActive ? 'active' : ''}>
                           <FaTruck /> My Dashboard
                         </NavLink>
@@ -98,12 +139,134 @@ export default function Layout() {
                       <FaMoneyBillWave /> My Deposits
                     </NavLink>
                   </li>
+                  <li>
+                    <NavLink to="/chat" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaComments /> Team chat
+                    </NavLink>
+                  </li>
+                </>
+            ) : user?.role === 'staff' ? (
+                <>
+                  <li>
+                    <NavLink to="/time-clock" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaClock /> Time clock
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink to="/chat" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaComments /> Team chat
+                    </NavLink>
+                  </li>
+                  <li className="menu-group">
+                    <div className="menu-group-header" onClick={() => toggleGroup('operations')}>
+                      <span className="group-label">
+                        <FaClipboardList /> Daily Operations
+                      </span>
+                      {expandedGroups.operations ? <FaChevronDown className="arrow" /> : <FaChevronRight className="arrow" />}
+                    </div>
+                    {expandedGroups.operations && (
+                      <ul className="submenu">
+                        <li>
+                          <NavLink to="/scanner" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaBarcode /> Scanner
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/scanner-return" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaQrcode /> Return Scanner
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/prepare-scan" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaBoxOpen /> Préparation (scan)
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/history" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaHistory /> Scan History
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaShoppingCart /> Orders
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/order-analytics" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaChartPie /> Order analytics
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/pickups" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaTruck /> Pickups
+                          </NavLink>
+                        </li>
+                      </ul>
+                    )}
+                  </li>
+                  <li className="menu-group">
+                    <div className="menu-group-header" onClick={() => toggleGroup('inventory')}>
+                      <span className="group-label">
+                        <FaBoxes /> Inventory Management
+                      </span>
+                      {expandedGroups.inventory ? <FaChevronDown className="arrow" /> : <FaChevronRight className="arrow" />}
+                    </div>
+                    {expandedGroups.inventory && (
+                      <ul className="submenu">
+                        <li>
+                          <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaBoxes /> Products
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/categories" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaTags /> Categories
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/colors" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaPalette /> Colors
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/sizes" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaRuler /> Sizes
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/rayons" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaWarehouse /> Rayons
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/materials" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaLayerGroup /> Matières
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/fournisseurs" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaTruck /> Suppliers
+                          </NavLink>
+                        </li>
+                      </ul>
+                    )}
+                  </li>
                 </>
             ) : (
                 <>
             <li>
               <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaHome /> Dashboard
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/time-clock" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaClock /> Time clock
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/chat" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaComments /> Team chat
               </NavLink>
             </li>
 
@@ -317,7 +480,7 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
-          {user?.role !== 'delivery_man' && (
+          {user?.role !== 'delivery_man' && user?.role !== 'staff' && (
             <NavLink to="/organization" className={({ isActive }) => isActive ? 'active' : ''}>
               <FaCogs /> Organization
             </NavLink>

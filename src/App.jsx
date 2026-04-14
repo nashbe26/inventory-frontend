@@ -14,7 +14,6 @@ import Fournisseurs from './pages/Fournisseurs'
 import Products from './pages/Products'
 import ProductForm from './pages/ProductForm'
 import ProductDetails from './pages/ProductDetails'
-import BarcodeScanner from './pages/BarcodeScanner'
 import ReturnScanner from './pages/ReturnScanner'
 import DispatchScan from './pages/DispatchScan'
 import PrepareScan from './pages/PrepareScan'
@@ -73,7 +72,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="profile" element={<Profile />} />
           <Route path="time-clock" element={<TimeClock />} />
-          <Route path="scanner" element={<BarcodeScanner />} />
+          <Route path="scanner" element={<Navigate to="/prepare-scan" replace />} />
           <Route path="scanner-return" element={<ReturnScanner />} />
           <Route path="prepare-scan" element={<PrepareScan />} />
           <Route path="dispatch-scan" element={<DispatchScan />} />

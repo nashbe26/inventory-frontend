@@ -150,6 +150,39 @@ export default function Orders() {
 
   const normSku = (s) => (s == null ? '' : String(s).trim().toUpperCase());
 
+  /**
+   * Aligné sur la logique backend (prepare scan) : variantId, puis SKU/barcode ligne vs variante, puis seule variante.
+   */
+  const resolveVariantForLineItem = (product, item) => {
+    if (!product?.variants?.length) return null;
+    const variants = product.variants;
+    let variant = null;
+    if (item.variantId) {
+      const vId = item.variantId._id || item.variantId;
+      const vid = idStr(vId);
+      variants.map((v) => {
+        if(v._id==vid) console.log('v', v);
+      });
+ 
+      variant = variants.find((v) => v._id === vid) || null;
+    }
+    if (!variant && item.sku) {
+      const skuU = normSku(item.sku);
+      console.log('skuU', skuU);
+      
+      const s = String(item.sku).toLowerCase().trim();
+      console.log('s', s);
+      variant =
+        variants.find((v) => normSku(v.sku) === skuU) ||
+        variants.find((v) => v.barcode && String(v.barcode).toLowerCase().trim() === s) ||
+        null;
+    }
+    if (!variant && variants.length === 1) {
+      variant = variants[0];
+    }
+    return variant;
+  };
+
   /** @returns {boolean|null} true/false if known, null if product/variant could not be resolved */
   const checkStockAvailability = (item) => {
     if (!productsData?.data) return null;
@@ -165,20 +198,11 @@ export default function Orders() {
     if (!Number.isFinite(needQty) || needQty < 0) return null;
 
     if (product.variants && product.variants.length > 0) {
-      let variant = null;
-      if (item.variantId) {
-        const vId = item.variantId._id || item.variantId;
-        const vid = idStr(vId);
-        variant = product.variants.find((v) => idStr(v._id) === vid);
-      }
-      if (!variant && item.sku) {
-        const skuU = normSku(item.sku);
-        variant = product.variants.find((v) => normSku(v.sku) === skuU);
-      }
+      const variant = resolveVariantForLineItem(product, item);
+      console.log('variant', variant);
       if (variant) {
         return Number(variant.quantity) >= needQty;
       }
-      // Multi-variant product but line didn't match a variant — don't guess parent qty
       return null;
     }
 
@@ -201,14 +225,7 @@ export default function Orders() {
     if (!product) return { available: null, have: null, need: item.quantity };
     const needQty = Number(item.quantity);
     if (product.variants && product.variants.length > 0) {
-      let variant = null;
-      if (item.variantId) {
-        const vid = idStr(item.variantId._id || item.variantId);
-        variant = product.variants.find((v) => idStr(v._id) === vid);
-      }
-      if (!variant && item.sku) {
-        variant = product.variants.find((v) => normSku(v.sku) === normSku(item.sku));
-      }
+      const variant = resolveVariantForLineItem(product, item);
       if (variant) {
         const have = Number(variant.quantity);
         return { available: have >= needQty, have, need: needQty };
@@ -268,14 +285,7 @@ export default function Orders() {
 
         let vKey = null;
         if (product.variants?.length) {
-          let variant = null;
-          if (item.variantId) {
-            const vid = idStr(item.variantId._id || item.variantId);
-            variant = product.variants.find((v) => idStr(v._id) === vid);
-          }
-          if (!variant && item.sku) {
-            variant = product.variants.find((v) => normSku(v.sku) === normSku(item.sku));
-          }
+          const variant = resolveVariantForLineItem(product, item);
           vKey = variant ? `${product._id}::${variant._id}` : null;
         } else {
           vKey = `${product._id}::__root`;
@@ -328,15 +338,39 @@ export default function Orders() {
   };
 
   const allFilteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer?.telephone?.includes(searchTerm) ||
-      order.items?.some(
-        (item) =>
-          item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.sku?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    const sTerm = searchTerm.toLowerCase().trim();
+    
+    // Si la recherche est vide, on garde tout
+    if (!sTerm) {
+      // (la suite vérifie les autres filtres)
+    }
+
+    const matchesSearch = !sTerm ||
+      order.orderNumber?.toLowerCase().includes(sTerm) ||
+      order.deliveryBarcode?.toLowerCase().includes(sTerm) ||
+      order.customer?.nom?.toLowerCase().includes(sTerm) ||
+      order.customer?.telephone?.includes(sTerm) ||
+      order.customer?.telephone2?.includes(sTerm) ||
+      order.items?.some((item) => {
+        // Recherche par nom ou SKU de la ligne
+        if (item.productName?.toLowerCase().includes(sTerm)) return true;
+        if (item.sku?.toLowerCase().includes(sTerm)) return true;
+
+        // Recherche approfondie sur le code-barres / SKU depuis le catalogue (productsData)
+        if (productsData?.data) {
+          const pId = idStr(item.productId?._id || item.productId || item.product);
+          const product = productsData.data.find((p) => idStr(p._id) === pId);
+          if (product) {
+            if (product.barcode?.toLowerCase().includes(sTerm)) return true;
+            if (product.sku?.toLowerCase().includes(sTerm)) return true;
+            if (product.variants?.some(v => 
+              v.barcode?.toLowerCase().includes(sTerm) || 
+              v.sku?.toLowerCase().includes(sTerm)
+            )) return true;
+          }
+        }
+        return false;
+      });
 
     const matchesProduct =
       productFilter === '' ||

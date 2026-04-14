@@ -275,7 +275,7 @@ export default function ProductDetails() {
                         <FaEdit className="mr-2 text-gray-500" /> Edit
                      </Link>
                      <button 
-                        onClick={() => navigate(`/scanner?sku=${product.sku}`)}
+                        onClick={() => navigate('/prepare-scan')}
                         className="flex-1 md:flex-none justify-center items-center px-4 py-2 border border-blue-300 rounded-lg shadow-sm text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-all focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                      >
                         <FaBarcode className="mr-2" /> Scan Mode

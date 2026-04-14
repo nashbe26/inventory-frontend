@@ -39,11 +39,12 @@ function staffPathAllowed(pathname) {
     '/products',
     '/orders',
     '/order-analytics',
-    '/scanner',
     '/scanner-return',
     '/prepare-scan',
+    '/dispatch-scan',
     '/history',
     '/pickups',
+    '/bordereaux',
     '/categories',
     '/colors',
     '/sizes',
@@ -65,10 +66,10 @@ export default function Layout() {
   if (user?.role === 'staff') {
     const p = location.pathname;
     if (p === '/') {
-      return <Navigate to="/scanner" replace />;
+      return <Navigate to="/prepare-scan" replace />;
     }
     if (!staffPathAllowed(p)) {
-      return <Navigate to="/scanner" replace />;
+      return <Navigate to="/prepare-scan" replace />;
     }
   }
   
@@ -167,8 +168,8 @@ export default function Layout() {
                     {expandedGroups.operations && (
                       <ul className="submenu">
                         <li>
-                          <NavLink to="/scanner" className={({ isActive }) => isActive ? 'active' : ''}>
-                            <FaBarcode /> Scanner
+                          <NavLink to="/prepare-scan" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaBoxOpen /> Préparation (scan)
                           </NavLink>
                         </li>
                         <li>
@@ -177,8 +178,8 @@ export default function Layout() {
                           </NavLink>
                         </li>
                         <li>
-                          <NavLink to="/prepare-scan" className={({ isActive }) => isActive ? 'active' : ''}>
-                            <FaBoxOpen /> Préparation (scan)
+                          <NavLink to="/dispatch-scan" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaTruck /> Expédition (scan)
                           </NavLink>
                         </li>
                         <li>
@@ -199,6 +200,11 @@ export default function Layout() {
                         <li>
                           <NavLink to="/pickups" className={({ isActive }) => isActive ? 'active' : ''}>
                             <FaTruck /> Pickups
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/bordereaux" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaClipboardList /> Bordereaux
                           </NavLink>
                         </li>
                       </ul>
@@ -282,8 +288,8 @@ export default function Layout() {
               {expandedGroups.operations && (
                 <ul className="submenu">
                   <li>
-                    <NavLink to="/scanner" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaBarcode /> Scanner
+                    <NavLink to="/prepare-scan" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaBoxOpen /> Préparation (scan)
                     </NavLink>
                   </li>
                   <li>
@@ -291,12 +297,9 @@ export default function Layout() {
                       <FaQrcode /> Return Scanner
                     </NavLink>
                   </li>
-                  <li>
-                    <NavLink to="/prepare-scan" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaBoxOpen /> Préparation (scan)
-                    </NavLink>
-                  </li>
-                  {(user?.role === 'admin' || user?.role === 'manager') && (
+                  {(user?.role === 'admin' ||
+                    user?.role === 'manager' ||
+                    user?.role === 'staff') && (
                     <li>
                       <NavLink to="/dispatch-scan" className={({ isActive }) => isActive ? 'active' : ''}>
                         <FaTruck /> Expédition (scan)

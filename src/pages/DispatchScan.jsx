@@ -115,7 +115,7 @@ export default function DispatchScan() {
                 border: '2px solid #2980b9'
               }}
             />
-            <small>Réservé aux administrateurs et managers.</small>
+            <small>Accès : administrateurs, managers et employés (équipe expédition).</small>
           </div>
           <button
             type="submit"

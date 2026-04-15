@@ -68,6 +68,14 @@ const tunisiaGovernorates = [
   'Sfax', 'Sidi Bouzid', 'Siliana', 'Sousse', 'Tataouine', 'Tozeur', 'Tunis', 'Zaghouan'
 ];
 
+/** Same sentinel as backend: order cannot be confirmed until a real governorate is set. */
+const GOVERNORATE_ADDRESS_UNAVAILABLE = 'Adresse non disponible';
+
+function isGovernorateIncompleteForConfirmation(gouvernerat) {
+  const g = String(gouvernerat || '').trim();
+  return !g || g === GOVERNORATE_ADDRESS_UNAVAILABLE;
+}
+
 export default function Orders() {
   const { user } = useAuth();
   const isStaff = user?.role === 'staff';
@@ -1170,16 +1178,49 @@ export default function Orders() {
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
                         {canOpsOrders ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
                           <select
                             className={`badge ${getStatusBadge(order.status)}`}
                             value={canonicalStatusLabel(order.status)}
-                            onChange={(e) => updateStatusMutation.mutate({ id: order._id, status: e.target.value })}
+                            title={
+                              isGovernorateIncompleteForConfirmation(order.customer?.gouvernerat)
+                                ? 'Choisissez un gouvernorat réel (modifier la commande) avant de confirmer.'
+                                : undefined
+                            }
+                            onChange={(e) => {
+                              const next = e.target.value;
+                              const pending = isGovernorateIncompleteForConfirmation(order.customer?.gouvernerat);
+                              const wantsConfirm =
+                                (next === 'Confirmé' || next === 'Confirmée') &&
+                                !['confirmé', 'confirmée'].includes((order.status || '').toLowerCase());
+                              if (wantsConfirm && pending) {
+                                toast.error('Renseignez un gouvernorat valide avant de confirmer (adresse non disponible).');
+                                return;
+                              }
+                              updateStatusMutation.mutate({ id: order._id, status: next });
+                            }}
                             style={{ cursor: 'pointer', border: 'none' }}
                           >
                             {statuses.map((status) => (
-                              <option key={status} value={status}>{status}</option>
+                              <option
+                                key={status}
+                                value={status}
+                                disabled={
+                                  status === 'Confirmé' &&
+                                  isGovernorateIncompleteForConfirmation(order.customer?.gouvernerat)
+                                }
+                              >
+                                {status}
+                              </option>
                             ))}
                           </select>
+                          {isGovernorateIncompleteForConfirmation(order.customer?.gouvernerat) &&
+                            (order.status || '').toLowerCase() === 'en attente' && (
+                            <span style={{ fontSize: '0.72rem', color: '#b45309', maxWidth: '200px', lineHeight: 1.3 }}>
+                              Gouvernorat à compléter avant confirmation
+                            </span>
+                          )}
+                          </div>
                         ) : (
                           <span className={`badge ${getStatusBadge(order.status)}`}>
                               {canonicalStatusLabel(order.status)}
@@ -1675,6 +1716,7 @@ export default function Orders() {
               <select className="form-control" value={customer.gouvernerat}
                 onChange={(e) => setCustomer({ ...customer, gouvernerat: e.target.value })}>
                 <option value="" disabled>Select Governorate</option>
+                <option value={GOVERNORATE_ADDRESS_UNAVAILABLE}>{GOVERNORATE_ADDRESS_UNAVAILABLE}</option>
                 {tunisiaGovernorates.map(gov => (
                   <option key={gov} value={gov}>{gov}</option>
                 ))}

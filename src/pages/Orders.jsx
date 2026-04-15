@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaClipboardList, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle, FaCopy, FaExclamationTriangle, FaLayerGroup } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaClipboardList, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle, FaCopy, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import api, { syncShopifyOrdersAllBatches } from '../services/api';
 import Modal from '../components/Modal';
@@ -71,6 +71,8 @@ const tunisiaGovernorates = [
 /** Same sentinel as backend: order cannot be confirmed until a real governorate is set. */
 const GOVERNORATE_ADDRESS_UNAVAILABLE = 'Adresse non disponible';
 
+const stripPackProductNamePrefix = (name) => String(name || '').replace(/^Pack\s+/i, '').trim();
+
 function isGovernorateIncompleteForConfirmation(gouvernerat) {
   const g = String(gouvernerat || '').trim();
   return !g || g === GOVERNORATE_ADDRESS_UNAVAILABLE;
@@ -103,7 +105,10 @@ export default function Orders() {
   const [selectedDeliveryMan, setSelectedDeliveryMan] = useState('');
   const [stockFilter, setStockFilter] = useState(''); // '' | 'available' | 'unavailable'
   const [outOfStockOrder, setOutOfStockOrder] = useState(null);
-  
+  /** One bundle price for the whole order (above line items). */
+  const [bundleOrderEnabled, setBundleOrderEnabled] = useState(false);
+  const [bundleSubtotalInput, setBundleSubtotalInput] = useState('');
+
   // Pagination State
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -139,6 +144,37 @@ export default function Orders() {
     staleTime: 60 * 1000
   });
 
+  const getCatalogUnitForItem = (item) => {
+    const pid = item.productId?._id || item.productId;
+    const p = productsData?.data?.find((x) => String(x._id) === String(pid));
+    return Number(p?.price) || 0;
+  };
+
+  const computeCatalogItemsSubtotal = (items) =>
+    items.reduce((s, item) => s + getCatalogUnitForItem(item) * Number(item.quantity || 0), 0);
+
+  const allocateBundleUnitPrices = (items, targetSubtotalRaw) => {
+    const b = Number(targetSubtotalRaw);
+    if (!items.length || !Number.isFinite(b) || b < 0) return items;
+    const weights = items.map((it) => getCatalogUnitForItem(it) * Number(it.quantity || 0));
+    const sumW = weights.reduce((a, c) => a + c, 0);
+    if (sumW <= 0) {
+      const qtySum = items.reduce((s, it) => s + Number(it.quantity || 0), 0) || 1;
+      const per = b / qtySum;
+      return items.map((it) => ({ ...it, unitPrice: per }));
+    }
+    return items.map((it, idx) => {
+      const share = (b * weights[idx]) / sumW;
+      const q = Number(it.quantity) || 1;
+      return { ...it, unitPrice: share / q };
+    });
+  };
+
+  const orderItemsDisplayed = useMemo(() => {
+    if (!bundleOrderEnabled || !orderItems.length) return orderItems;
+    return allocateBundleUnitPrices(orderItems, bundleSubtotalInput);
+  }, [bundleOrderEnabled, bundleSubtotalInput, orderItems, productsData]);
+
   const { data: deliveryMenData } = useQuery({
     queryKey: ['deliveryMen'],
     queryFn: async () => {
@@ -168,18 +204,11 @@ export default function Orders() {
     if (item.variantId) {
       const vId = item.variantId._id || item.variantId;
       const vid = idStr(vId);
-      variants.map((v) => {
-        if(v._id==vid) console.log('v', v);
-      });
- 
       variant = variants.find((v) => v._id === vid) || null;
     }
     if (!variant && item.sku) {
       const skuU = normSku(item.sku);
-      console.log('skuU', skuU);
-      
       const s = String(item.sku).toLowerCase().trim();
-      console.log('s', s);
       variant =
         variants.find((v) => normSku(v.sku) === skuU) ||
         variants.find((v) => v.barcode && String(v.barcode).toLowerCase().trim() === s) ||
@@ -207,7 +236,6 @@ export default function Orders() {
 
     if (product.variants && product.variants.length > 0) {
       const variant = resolveVariantForLineItem(product, item);
-      console.log('variant', variant);
       if (variant) {
         return Number(variant.quantity) >= needQty;
       }
@@ -257,92 +285,27 @@ export default function Orders() {
     return 'unknown';
   };
 
-  const stockMappingExcludedStatuses = ['livré', 'annulé', 'annulée'];
+  const isPretAPreparerOrder = (order) =>
+    String(order?.status || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim() === 'pret a preparer';
 
-  const stockMapping = useMemo(() => {
-    const map = {};
-    if (!productsData?.data || !orders.length) return map;
-
-    const virtualStock = {};
-    for (const p of productsData.data) {
-      if (p.variants?.length) {
-        for (const v of p.variants) {
-          const key = `${p._id}::${v._id}`;
-          virtualStock[key] = Number(v.quantity) || 0;
-        }
-      } else {
-        const qty = p.quantity !== undefined ? Number(p.quantity) : (p.totalQuantity !== undefined ? Number(p.totalQuantity) : 0);
-        virtualStock[`${p._id}::__root`] = qty;
-      }
-    }
-
-    const eligible = orders
-      .filter((o) => !stockMappingExcludedStatuses.includes((o.status || '').toLowerCase()))
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-    let rank = 0;
-    for (const order of eligible) {
-      const items = order.items || [];
-      if (!items.length) { map[order._id] = { fulfillable: false, rank: null, shortages: [] }; continue; }
-
-      const needed = [];
-      for (const item of items) {
-        const pId = idStr(item.productId?._id || item.productId || item.product);
-        const product = pId ? productsData.data.find((p) => idStr(p._id) === pId) : null;
-        if (!product) { needed.push({ key: null, need: Number(item.quantity), name: item.productName }); continue; }
-
-        let vKey = null;
-        if (product.variants?.length) {
-          const variant = resolveVariantForLineItem(product, item);
-          vKey = variant ? `${product._id}::${variant._id}` : null;
-        } else {
-          vKey = `${product._id}::__root`;
-        }
-        needed.push({ key: vKey, need: Number(item.quantity) || 1, name: item.productName + (item.colorName ? ` - ${item.colorName}` : '') + (item.sizeLabel ? ` - ${item.sizeLabel}` : '') });
-      }
-
-      const canFulfill = needed.every((n) => n.key && (virtualStock[n.key] || 0) >= n.need);
-
-      if (canFulfill) {
-        rank++;
-        for (const n of needed) virtualStock[n.key] -= n.need;
-        map[order._id] = { fulfillable: true, rank, shortages: [] };
-      } else {
-        const shortages = needed
-          .filter((n) => !n.key || (virtualStock[n.key] || 0) < n.need)
-          .map((n) => ({ name: n.name, have: n.key ? (virtualStock[n.key] || 0) : 0, need: n.need }));
-        map[order._id] = { fulfillable: false, rank: null, shortages };
-      }
-    }
-    return map;
-  }, [productsData?.data, orders]);
-
-  /** Same as Map column + stock filter: open orders use stock in date order (oldest first); Livré/Annulé use shelf only */
+  /**
+   * Shelf stock display for filters: only « Prêt à préparer » orders participate.
+   * Other statuses return a sentinel so In stock / Out of stock filters do not match them.
+   */
   const getOrderStockMapDisplay = (order) => {
-    if (stockMappingExcludedStatuses.includes((order.status || '').toLowerCase())) {
-      return getOrderStockDisplay(order);
-    }
-    const m = stockMapping[order._id];
-    if (m === undefined) return 'unknown';
-    return m.fulfillable ? 'ok' : 'out';
+    if (!isPretAPreparerOrder(order)) return '__not_prep__';
+    return getOrderStockDisplay(order);
   };
 
-  const stockMapLineLabel = (item) =>
-    (item.productName || '') +
-    (item.colorName ? ` - ${item.colorName}` : '') +
-    (item.sizeLabel ? ` - ${item.sizeLabel}` : '');
-
-  /** Per-line icons: match Map column for open orders; shelf check for Livré/Annulé */
+  /** Per-line stock icons only for « Prêt à préparer » (catalog / shelf). */
   const getLineItemStockMapAvailability = (item, order) => {
-    if (stockMappingExcludedStatuses.includes((order.status || '').toLowerCase())) {
-      return checkStockAvailability(item);
-    }
-    const m = stockMapping[order._id];
-    if (m === undefined) return checkStockAvailability(item);
-    if (m.fulfillable) return true;
-    const label = stockMapLineLabel(item);
-    const inShortage = m.shortages?.some((s) => s.name === label);
-    return inShortage ? false : true;
+    if (!isPretAPreparerOrder(order)) return undefined;
+    return checkStockAvailability(item);
   };
 
   const allFilteredOrders = orders.filter((order) => {
@@ -452,6 +415,8 @@ export default function Orders() {
     setProductSearch('');
     setVariantPickerProduct(null);
     setVariantFilter('');
+    setBundleOrderEnabled(false);
+    setBundleSubtotalInput('');
   };
 
   const closeModal = () => {
@@ -703,29 +668,45 @@ export default function Orders() {
   const addItemToOrder = (product, variant, fromVariantStep = false) => {
     const itemKey = variant ? `${product._id}-${variant._id}` : product._id;
     const existingItem = orderItems.find(item => item.itemKey === itemKey);
-    
-    const displayName = variant 
-      ? `${product.name} (${variant.colorId?.name || 'N/A'}, ${variant.sizeId?.label || 'N/A'})` 
+
+    const displayName = variant
+      ? `${product.name} (${variant.colorId?.name || 'N/A'}, ${variant.sizeId?.label || 'N/A'})`
       : product.name;
     const sku = variant ? variant.sku : product.sku;
     const availableStock = variant ? variant.quantity : product.quantity;
-    
+
+    const oldSum = computeCatalogItemsSubtotal(orderItems);
+    let newItems;
     if (existingItem) {
-      setOrderItems(orderItems.map(item =>
+      newItems = orderItems.map((item) =>
         item.itemKey === itemKey ? { ...item, quantity: item.quantity + 1 } : item
-      ));
+      );
     } else {
-      setOrderItems([...orderItems, {
-        itemKey,
-        productId: product._id,
-        variantId: variant?._id,
-        productName: displayName,
-        sku: sku,
-        quantity: 1,
-        unitPrice: product.price || 0,
-        availableStock: availableStock
-      }]);
+      newItems = [
+        ...orderItems,
+        {
+          itemKey,
+          productId: product._id,
+          variantId: variant?._id,
+          productName: displayName,
+          sku,
+          quantity: 1,
+          unitPrice: Number(product.price) || 0,
+          availableStock
+        }
+      ];
     }
+    setOrderItems(newItems);
+
+    if (bundleOrderEnabled) {
+      const newSum = computeCatalogItemsSubtotal(newItems);
+      setBundleSubtotalInput((prev) => {
+        const p = Number(prev);
+        if (oldSum > 0 && Number.isFinite(p) && p > 0 && newSum > 0) return String((p * newSum) / oldSum);
+        return String(newSum || 0);
+      });
+    }
+
     if (!fromVariantStep) {
       setProductSearch('');
       setVariantPickerProduct(null);
@@ -734,20 +715,73 @@ export default function Orders() {
   };
 
   const removeItem = (itemKey) => {
-    setOrderItems(orderItems.filter(item => item.itemKey !== itemKey));
+    const oldSum = computeCatalogItemsSubtotal(orderItems);
+    const newItems = orderItems.filter((item) => item.itemKey !== itemKey);
+    setOrderItems(newItems);
+    if (bundleOrderEnabled) {
+      if (!newItems.length) {
+        setBundleSubtotalInput('0');
+      } else {
+        const newSum = computeCatalogItemsSubtotal(newItems);
+        setBundleSubtotalInput((prev) => {
+          const p = Number(prev);
+          if (oldSum > 0 && newSum > 0 && Number.isFinite(p)) return String((p * newSum) / oldSum);
+          return String(newSum || 0);
+        });
+      }
+    }
   };
 
   const updateItemQuantity = (itemKey, quantity) => {
     if (quantity < 1) return;
-    setOrderItems(orderItems.map(item =>
-      item.itemKey === itemKey ? { ...item, quantity: parseInt(quantity) } : item
-    ));
+    const oldSum = computeCatalogItemsSubtotal(orderItems);
+    const newItems = orderItems.map((item) =>
+      item.itemKey === itemKey ? { ...item, quantity: parseInt(quantity, 10) } : item
+    );
+    setOrderItems(newItems);
+    if (bundleOrderEnabled) {
+      const newSum = computeCatalogItemsSubtotal(newItems);
+      setBundleSubtotalInput((prev) => {
+        const p = Number(prev);
+        if (oldSum > 0 && newSum > 0 && Number.isFinite(p)) return String((p * newSum) / oldSum);
+        return String(newSum || 0);
+      });
+    }
   };
 
-  const calculateTotal = () => {
-    const subtotal = orderItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-    return subtotal + shipping;
+  const onToggleBundleOrder = (checked) => {
+    setBundleOrderEnabled(checked);
+    if (checked) {
+      const sum = computeCatalogItemsSubtotal(orderItems);
+      setBundleSubtotalInput(String(sum || 0));
+    } else {
+      setBundleSubtotalInput('');
+      setOrderItems((prev) =>
+        prev.map((item) => {
+          const p = productsData?.data?.find((x) => String(x._id) === String(item.productId));
+          const cat = Number(p?.price);
+          return {
+            ...item,
+            productName: stripPackProductNamePrefix(item.productName),
+            unitPrice: Number.isFinite(cat) ? cat : item.unitPrice
+          };
+        })
+      );
+    }
   };
+
+  /** Sum of line totals (bundle mode = single negotiated subtotal). */
+  const calculateItemsSubtotal = () => {
+    if (bundleOrderEnabled && orderItems.length > 0) {
+      return Number(bundleSubtotalInput) || 0;
+    }
+    return orderItems.reduce(
+      (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 0),
+      0
+    );
+  };
+
+  const calculateGrandTotal = () => calculateItemsSubtotal() + (Number(shipping) || 0);
 
   const toggleOrderSelection = (id) => {
     const newSelected = new Set(selectedOrderIds);
@@ -785,14 +819,31 @@ export default function Orders() {
         itemKey: vid ? `${pid}-${vid}` : pid,
         productId: pid,
         variantId: vid,
-        productName: item.productName,
+        productName: stripPackProductNamePrefix(item.productName),
         sku: item.sku,
         quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        availableStock: 9999 // We don't have exact available stock without finding the product again, so we assume a large number for editing existing qty, or it can be limited by product stock later
+        unitPrice: Number(item.unitPrice) || 0,
+        availableStock: 9999
       };
     });
-    
+
+    const legacyAllBundle =
+      order.items?.length > 0 && order.items.every((i) => Boolean(i.isBundleLine));
+    const bundleOn = Boolean(order.isBundleOrder) || legacyAllBundle;
+    const catSum = mappedItems.reduce((s, item) => {
+      const p = productsData?.data?.find((x) => String(x._id) === String(item.productId));
+      return s + Number(p?.price || 0) * Number(item.quantity || 0);
+    }, 0);
+
+    setBundleOrderEnabled(bundleOn);
+    {
+      let init = '';
+      if (bundleOn) {
+        init = order.bundleSubtotal ?? order.subtotal ?? catSum;
+      }
+      setBundleSubtotalInput(init === '' || init == null ? '' : String(init));
+    }
+
     setOrderItems(mappedItems);
     setIsModalOpen(true);
   };
@@ -803,16 +854,30 @@ export default function Orders() {
       toast.error('Please add at least one item');
       return;
     }
-    
+    if (bundleOrderEnabled) {
+      const b = Number(bundleSubtotalInput);
+      if (!Number.isFinite(b) || b < 0) {
+        toast.error('Enter a valid bundle subtotal (≥ 0).');
+        return;
+      }
+    }
+
+    const itemsForApi = bundleOrderEnabled
+      ? allocateBundleUnitPrices(orderItems, bundleSubtotalInput)
+      : orderItems;
+
     const orderData = {
         customer,
-        items: orderItems.map((item) => ({
+        isBundleOrder: bundleOrderEnabled,
+        bundleSubtotal: bundleOrderEnabled ? Number(bundleSubtotalInput) : undefined,
+        items: itemsForApi.map((item) => ({
             product: item.productId,
             variantId: item.variantId,
             variant: item.variantId,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
-            price: item.unitPrice
+            price: item.unitPrice,
+            isBundleLine: bundleOrderEnabled
         })),
         shipping,
         source,
@@ -1016,7 +1081,7 @@ export default function Orders() {
                           className="form-control"
                           value={stockFilter}
                           onChange={(e) => setStockFilter(e.target.value)}
-                          title="Matches the Map column: open orders use stock in date order (oldest first). Delivered/Cancelled use shelf quantities only."
+                          title="Only orders in « Prêt à préparer » are matched: In stock / Out of stock use catalog shelf quantities. Other statuses are hidden when this filter is set."
                       >
                           <option value="">All Stock</option>
                           <option value="available">In Stock</option>
@@ -1052,17 +1117,6 @@ export default function Orders() {
         </div>
       </div>
 
-      {Object.keys(stockMapping).length > 0 && (
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', padding: '10px 16px', marginBottom: '12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', fontSize: '0.9rem' }}>
-          <FaLayerGroup style={{ color: '#0284c7' }} />
-          <span><strong style={{ color: '#16a34a' }}>{Object.values(stockMapping).filter((m) => m.fulfillable).length}</strong> fulfillable</span>
-          <span><strong style={{ color: '#dc2626' }}>{Object.values(stockMapping).filter((m) => !m.fulfillable).length}</strong> insufficient stock</span>
-          <span style={{ color: '#6b7280' }}>
-            ({Object.keys(stockMapping).length} open orders in stock map, oldest first; Livré/Annulé excluded — In Stock / Out of Stock filter matches this)
-          </span>
-        </div>
-      )}
-
       <div className="card">
         <div className="table-container">
           <table className="table">
@@ -1075,7 +1129,7 @@ export default function Orders() {
                         onChange={toggleAllSelection}
                     />
                 </th>
-                <th>Map</th>
+                <th title="Catalog / shelf stock — shown only for « Prêt à préparer »">Stock</th>
                 <th>Phone</th>
                 <th>Products</th>
                 <th>Customer</th>
@@ -1102,31 +1156,68 @@ export default function Orders() {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {(() => {
-                        const m = stockMapping[order._id];
-                        if (!m) return <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>—</span>;
-                        if (m.fulfillable) return (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            width: '28px', height: '28px', borderRadius: '50%',
-                            background: '#dcfce7', color: '#16a34a', fontWeight: '700', fontSize: '0.85rem',
-                            border: '2px solid #86efac'
-                          }} title={`In stock — serving order #${m.rank} (by date, oldest first)`}>
-                            {m.rank}
-                          </span>
-                        );
+                        if (!isPretAPreparerOrder(order)) {
+                          return (
+                            <span style={{ color: '#9ca3af', fontSize: '0.8rem' }} title="Stock column applies only to « Prêt à préparer »">
+                              —
+                            </span>
+                          );
+                        }
+                        const shelf = getOrderStockDisplay(order);
+                        if (shelf === 'none') {
+                          return <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>—</span>;
+                        }
+                        if (shelf === 'ok') {
+                          return (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '50%',
+                                background: '#dcfce7',
+                                color: '#16a34a',
+                                fontWeight: '700',
+                                fontSize: '0.85rem',
+                                border: '2px solid #86efac'
+                              }}
+                              title="In stock — catalog / shelf quantities"
+                            >
+                              ✓
+                            </span>
+                          );
+                        }
+                        if (shelf === 'out') {
+                          return (
+                            <button
+                              type="button"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '50%',
+                                background: '#fee2e2',
+                                color: '#dc2626',
+                                fontWeight: '700',
+                                fontSize: '0.85rem',
+                                border: '2px solid #fca5a5',
+                                cursor: 'pointer'
+                              }}
+                              title="Out of stock on shelf — click for details"
+                              onClick={() => setOutOfStockOrder(order)}
+                            >
+                              ✕
+                            </button>
+                          );
+                        }
                         return (
-                          <button
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              width: '28px', height: '28px', borderRadius: '50%',
-                              background: '#fee2e2', color: '#dc2626', fontWeight: '700', fontSize: '0.85rem',
-                              border: '2px solid #fca5a5', cursor: 'pointer'
-                            }}
-                            title="Out of stock — click for details"
-                            onClick={() => setOutOfStockOrder({ ...order, _mappingShortages: m.shortages })}
-                          >
-                            ✕
-                          </button>
+                          <span style={{ color: '#9ca3af', fontSize: '0.8rem', fontWeight: '600' }} title="Could not verify all lines">
+                            ?
+                          </span>
                         );
                       })()}
                     </td>
@@ -1157,6 +1248,7 @@ export default function Orders() {
                                     {item.colorName && <span className="text-gray-600 ml-1">- {item.colorName}</span>}
                                     {item.sizeLabel && <span className="text-gray-600 ml-1">- {item.sizeLabel}</span>}
                                     {item.quantity > 1 && <span className="badge badge-sm badge-secondary" style={{ marginLeft: '5px' }}>x{item.quantity}</span>}
+                                    {(isAvailable === true || isAvailable === false || isAvailable === null) && (
                                     <span style={{ marginLeft: '5px', display: 'inline-flex', alignItems: 'center' }}>
                                       {isAvailable === true && (
                                         <FaCheck className="text-green-500" title="In stock" />
@@ -1168,6 +1260,7 @@ export default function Orders() {
                                         <FaQuestionCircle className="text-gray-400" title="Stock unknown (product not found or variant not matched)" />
                                       )}
                                     </span>
+                                    )}
                                 </div>
                             )})}
                         </div>
@@ -1243,29 +1336,27 @@ export default function Orders() {
                     <td>{new Date(order.createdAt).toLocaleDateString()}</td>
                     <td style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap' }}>
                       {(() => {
-                        const stock = getOrderStockMapDisplay(order);
+                        if (!isPretAPreparerOrder(order)) return null;
+                        const stock = getOrderStockDisplay(order);
                         if (stock === 'ok') {
                           return (
                             <span style={{ marginRight: '10px', display: 'flex', alignItems: 'center' }}>
                               <FaCheck
                                 className="text-green-500"
-                                title="In stock (same rules as Map column; delivered/cancelled orders use shelf quantities)"
+                                title="In stock (catalog / shelf — « Prêt à préparer » only)"
                                 size={20}
                               />
                             </span>
                           );
                         }
                         if (stock === 'out') {
-                          const m = stockMapping[order._id];
                           return (
                             <button
                               className="btn btn-sm"
                               style={{ marginRight: '10px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '6px' }}
                               title="Out of stock — click for details"
-                              onClick={() => {
-                                if (m?.shortages?.length) setOutOfStockOrder({ ...order, _mappingShortages: m.shortages });
-                                else setOutOfStockOrder(order);
-                              }}
+                              type="button"
+                              onClick={() => setOutOfStockOrder(order)}
                             >
                               <FaExclamationTriangle size={14} /> Out
                             </button>
@@ -1641,6 +1732,41 @@ export default function Orders() {
           </div>
 
           <div className="form-group">
+            <label>Bundle pricing</label>
+            <div
+              className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3"
+              style={{ marginTop: '4px' }}
+            >
+              <label className="mb-2 flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-800">
+                <input
+                  type="checkbox"
+                  checked={bundleOrderEnabled}
+                  onChange={(e) => onToggleBundleOrder(e.target.checked)}
+                />
+                This order is a bundle (one subtotal for all lines — catalog prices are not used per line)
+              </label>
+              {bundleOrderEnabled && (
+                <div className="mt-2">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Bundle subtotal (dt)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-control"
+                    style={{ maxWidth: '200px' }}
+                    value={bundleSubtotalInput}
+                    onChange={(e) => setBundleSubtotalInput(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-gray-600">
+                    Unit prices in the table are a split of this total (by catalog proportions). Change products with
+                    remove + add above; the bundle total scales when qty or lines change.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="form-group">
             <label>Order Items</label>
             {orderItems.length === 0 ? (
               <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>No items added</p>
@@ -1648,35 +1774,67 @@ export default function Orders() {
               <div className="table-container">
                 <table>
                   <thead>
-                    <tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr>
+                    <tr>
+                      <th>Product</th>
+                      <th>Qty</th>
+                      <th>Unit price</th>
+                      <th>Total</th>
+                      <th></th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {orderItems.map(item => (
+                    {(bundleOrderEnabled ? orderItemsDisplayed : orderItems).map((item) => (
                       <tr key={item.itemKey}>
-                        <td><strong>{item.productName}</strong><br /><small>{item.sku}</small></td>
+                        <td>
+                          <strong>{item.productName}</strong>
+                          <br />
+                          <small>{item.sku}</small>
+                        </td>
                         <td>
                           <input
-                            type="number" min="1" value={item.quantity}
+                            type="number"
+                            min="1"
+                            value={item.quantity}
                             onChange={(e) => updateItemQuantity(item.itemKey, e.target.value)}
-                            className="form-control" style={{ width: '70px' }}
+                            className="form-control"
+                            style={{ width: '70px' }}
                           />
                         </td>
-                        <td>{item.unitPrice.toFixed(2)} dt</td>
-                        <td><strong>{(item.unitPrice * item.quantity).toFixed(2)} dt</strong></td>
                         <td>
-                          <button type="button" className="btn btn-sm btn-danger" onClick={() => removeItem(item.itemKey)}>
+                          <span className={bundleOrderEnabled ? 'text-gray-600' : ''}>
+                            {Number(item.unitPrice).toFixed(2)} dt
+                          </span>
+                          {bundleOrderEnabled && (
+                            <span
+                              className="text-muted"
+                              style={{ fontSize: '0.65rem', display: 'block' }}
+                            >
+                              from bundle split
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <strong>{(Number(item.unitPrice) * item.quantity).toFixed(2)} dt</strong>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger"
+                            onClick={() => removeItem(item.itemKey)}
+                          >
                             <FaTimes />
                           </button>
                         </td>
                       </tr>
                     ))}
                     <tr>
-                      <td colSpan="3" style={{ textAlign: 'right' }}>Subtotal:</td>
-                      <td colSpan="2">{calculateTotal().toFixed(2)} dt</td>
+                      <td colSpan="3" style={{ textAlign: 'right' }}>Subtotal (lines):</td>
+                      <td>{calculateItemsSubtotal().toFixed(2)} dt</td>
+                      <td />
                     </tr>
                     <tr>
                       <td colSpan="3" style={{ textAlign: 'right' }}>Shipping:</td>
-                      <td colSpan="2">
+                      <td>
                         <input
                           type="number"
                           min="0"
@@ -1687,10 +1845,12 @@ export default function Orders() {
                           style={{ width: '100px' }}
                         /> dt
                       </td>
+                      <td />
                     </tr>
                     <tr>
                       <td colSpan="3" style={{ textAlign: 'right' }}><strong>Total:</strong></td>
-                      <td colSpan="2"><strong style={{ fontSize: '1rem', color: 'var(--primary-color)' }}>{calculateTotal().toFixed(2)} dt</strong></td>
+                      <td><strong style={{ fontSize: '1rem', color: 'var(--primary-color)' }}>{calculateGrandTotal().toFixed(2)} dt</strong></td>
+                      <td />
                     </tr>
                   </tbody>
                 </table>
@@ -1824,48 +1984,31 @@ export default function Orders() {
         {outOfStockOrder && (
           <div>
             <p style={{ marginBottom: '12px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Items that are out of stock or have insufficient quantity{outOfStockOrder._mappingShortages ? ' (after earlier orders by date are served first)' : ''}:
+              Items that are out of stock or have insufficient quantity (catalog / shelf):
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {outOfStockOrder._mappingShortages ? (
-                outOfStockOrder._mappingShortages.map((s, idx) => (
+              {outOfStockOrder.items?.map((item, idx) => {
+                const detail = getItemStockDetail(item);
+                if (detail.available !== false) return null;
+                return (
                   <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' }}>
-                    <div><strong>{s.name}</strong></div>
+                    <div>
+                      <strong>{item.productName}</strong>
+                      {item.colorName && <span style={{ color: '#6b7280', marginLeft: '6px' }}>- {item.colorName}</span>}
+                      {item.sizeLabel && <span style={{ color: '#6b7280', marginLeft: '6px' }}>- {item.sizeLabel}</span>}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                       <span style={{ fontSize: '0.85rem' }}>
-                        <span style={{ color: '#dc2626', fontWeight: '700' }}>{s.have}</span>
-                        <span style={{ color: '#6b7280' }}> / {s.need} needed</span>
+                        <span style={{ color: '#dc2626', fontWeight: '700' }}>{detail.have ?? '?'}</span>
+                        <span style={{ color: '#6b7280' }}> / {detail.need} needed</span>
                       </span>
                       <FaTimes className="text-red-500" size={14} />
                     </div>
                   </div>
-                ))
-              ) : (
-                <>
-                  {outOfStockOrder.items?.map((item, idx) => {
-                    const detail = getItemStockDetail(item);
-                    if (detail.available !== false) return null;
-                    return (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px' }}>
-                        <div>
-                          <strong>{item.productName}</strong>
-                          {item.colorName && <span style={{ color: '#6b7280', marginLeft: '6px' }}>- {item.colorName}</span>}
-                          {item.sizeLabel && <span style={{ color: '#6b7280', marginLeft: '6px' }}>- {item.sizeLabel}</span>}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                          <span style={{ fontSize: '0.85rem' }}>
-                            <span style={{ color: '#dc2626', fontWeight: '700' }}>{detail.have ?? '?'}</span>
-                            <span style={{ color: '#6b7280' }}> / {detail.need} needed</span>
-                          </span>
-                          <FaTimes className="text-red-500" size={14} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {outOfStockOrder.items?.every((item) => getItemStockDetail(item).available !== false) && (
-                    <p style={{ textAlign: 'center', color: '#6b7280' }}>No out-of-stock items found.</p>
-                  )}
-                </>
+                );
+              })}
+              {outOfStockOrder.items?.every((item) => getItemStockDetail(item).available !== false) && (
+                <p style={{ textAlign: 'center', color: '#6b7280' }}>No out-of-stock items found.</p>
               )}
             </div>
           </div>
@@ -1941,25 +2084,18 @@ export default function Orders() {
             )}
 
             <h4 style={{ marginTop: '15px' }}>Items</h4>
-            {(() => {
-              const m = stockMapping[selectedOrder._id];
-              if (m && !stockMappingExcludedStatuses.includes((selectedOrder.status || '').toLowerCase())) {
-                return (
-                  <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '10px' }}>
-                    {m.fulfillable
-                      ? `In stock for this order (serving order #${m.rank} by date).`
-                      : 'Out of stock: not enough left after earlier orders — lines with ✕ are short.'}
-                  </p>
-                );
-              }
-              return null;
-            })()}
+            <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '10px' }}>
+              {isPretAPreparerOrder(selectedOrder)
+                ? 'Line icons reflect catalog / shelf quantities for preparation.'
+                : 'Stock icons are shown only when the order is « Prêt à préparer ».'}
+            </p>
             {selectedOrder.items?.map((item, idx) => {
               const isAvailable = getLineItemStockMapAvailability(item, selectedOrder);
               return (
               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div><strong>{item.productName}</strong><br /><small>{item.quantity} x {item.unitPrice?.toFixed(2)} dt</small></div>
+                  {(isAvailable === true || isAvailable === false || isAvailable === null) && (
                   <span className="ml-2" style={{ display: 'inline-flex', alignItems: 'center' }}>
                     {isAvailable === true && <FaCheck className="text-green-500" title="In stock" />}
                     {isAvailable === false && <FaTimes className="text-red-500" title="Out of stock" />}
@@ -1967,6 +2103,7 @@ export default function Orders() {
                       <FaQuestionCircle className="text-gray-400" title="Stock unknown (product not found or variant not matched)" />
                     )}
                   </span>
+                  )}
                 </div>
                 <strong>{item.totalPrice?.toFixed(2)} dt</strong>
               </div>

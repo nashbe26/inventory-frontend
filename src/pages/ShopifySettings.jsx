@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api, { syncShopifyOrdersAllBatches } from '../services/api';
+import { productService } from '../services';
 import { toast } from 'react-toastify';
 import {
   FaShopify, FaSave, FaFlask, FaCopy, FaToggleOn, FaToggleOff,
   FaInfoCircle, FaCheckCircle, FaExclamationTriangle, FaDownload,
-  FaBoxes, FaCheck, FaSyncAlt, FaTimesCircle, FaKey
+  FaBoxes, FaCheck, FaSyncAlt, FaTimesCircle, FaKey, FaSearch
 } from 'react-icons/fa';
 
+const MAX_SHOPIFY_SELECTED_SYNC = 50;
+
 const ShopifySettings = () => {
+  const queryClient = useQueryClient();
   const [settings, setSettings] = useState({
     shopDomain: '',
     webhookSecret: '',
@@ -45,6 +50,67 @@ const ShopifySettings = () => {
   const [rayons, setRayons] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedRayon, setSelectedRayon] = useState('');
+  const [syncPickSearch, setSyncPickSearch] = useState('');
+  const [selectedSyncProductIds, setSelectedSyncProductIds] = useState(() => new Set());
+  const [selectedSyncResults, setSelectedSyncResults] = useState(null);
+
+  const { data: syncPickList, isFetching: syncPickListLoading } = useQuery({
+    queryKey: ['shopify-settings-pick-products', syncPickSearch],
+    queryFn: async () => {
+      const res = await productService.getAll({
+        search: syncPickSearch.trim(),
+        page: 1,
+        limit: 50
+      });
+      return res.data;
+    },
+    enabled: !loading && !!settings.hasAccessToken
+  });
+
+  const syncSelectedProductsMutation = useMutation({
+    mutationFn: async (productIds) => {
+      const { data } = await api.post('/webhooks/shopify/sync-products-selected', { productIds });
+      return data;
+    },
+    onSuccess: (data) => {
+      setSelectedSyncResults(data?.data || null);
+      queryClient.invalidateQueries(['products']);
+      queryClient.invalidateQueries(['shopify-settings-pick-products']);
+      setSelectedSyncProductIds(new Set());
+      const failed = data?.data?.failed || [];
+      toast.success(data?.message || 'Selected products synced from Shopify');
+      if (failed.length) {
+        toast.warn(
+          `${failed.length} could not sync — check Shopify link (product / variant id) or API errors.`,
+          { autoClose: 7000 }
+        );
+      }
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Sync failed');
+    }
+  });
+
+  const toggleSyncPickProduct = (id) => {
+    const sid = String(id);
+    setSelectedSyncProductIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sid)) {
+        next.delete(sid);
+        return next;
+      }
+      if (next.size >= MAX_SHOPIFY_SELECTED_SYNC) {
+        toast.warn(`You can select at most ${MAX_SHOPIFY_SELECTED_SYNC} products per sync.`);
+        return prev;
+      }
+      next.add(sid);
+      return next;
+    });
+  };
+
+  const clearSyncPickSelection = () => {
+    setSelectedSyncProductIds(new Set());
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -587,6 +653,135 @@ const ShopifySettings = () => {
               </div>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Sync selected products from Shopify (no quantities from Shopify) */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+        <div className="flex items-center gap-2">
+          <FaSyncAlt className="text-violet-600" />
+          <h3 className="font-semibold text-gray-900 text-lg">Sync selected products from Shopify</h3>
+        </div>
+        <p className="text-sm text-gray-500">
+          Updates <strong>name, description, price, SKUs, barcodes</strong>, and variant links from Shopify for{' '}
+          <strong>only the products you select</strong>. <strong>Variant quantities are not taken from Shopify</strong>{' '}
+          (your warehouse counts stay as they are; new variants added from Shopify start at 0).
+          Products must be linked to Shopify (import once, or have{' '}
+          <code className="rounded bg-gray-100 px-1 text-xs">shopifyProductId</code> / variant ids). Up to{' '}
+          <strong>{MAX_SHOPIFY_SELECTED_SYNC}</strong> per request.
+        </p>
+
+        {!settings.hasAccessToken ? (
+          <p className="text-xs text-orange-600">
+            Save a valid Admin API token above, then reload this page, to search and sync products.
+          </p>
+        ) : (
+          <>
+            <div className="relative">
+              <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="search"
+                value={syncPickSearch}
+                onChange={(e) => setSyncPickSearch(e.target.value)}
+                placeholder="Search catalog by name, SKU, barcode…"
+                className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600">
+              <span>
+                Selected: <strong className="text-violet-700">{selectedSyncProductIds.size}</strong> /{' '}
+                {MAX_SHOPIFY_SELECTED_SYNC}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={clearSyncPickSelection}
+                  disabled={!selectedSyncProductIds.size}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                >
+                  Clear selection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => syncSelectedProductsMutation.mutate([...selectedSyncProductIds])}
+                  disabled={
+                    syncSelectedProductsMutation.isPending || !selectedSyncProductIds.size || !settings.hasAccessToken
+                  }
+                  className="flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2 font-medium text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {syncSelectedProductsMutation.isPending ? (
+                    <>
+                      <FaSyncAlt className="animate-spin" />
+                      Syncing…
+                    </>
+                  ) : (
+                    <>
+                      <FaSyncAlt />
+                      Sync selected from Shopify
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50/80">
+              {syncPickListLoading ? (
+                <p className="p-4 text-center text-sm text-gray-500">Loading products…</p>
+              ) : !(syncPickList?.data?.length) ? (
+                <p className="p-4 text-center text-sm text-gray-500">No products match this search.</p>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {syncPickList.data.map((p) => {
+                    const sid = String(p._id);
+                    const checked = selectedSyncProductIds.has(sid);
+                    return (
+                      <li key={sid} className="flex items-center gap-3 px-3 py-2 hover:bg-white">
+                        <input
+                          type="checkbox"
+                          id={`sync-pick-${sid}`}
+                          checked={checked}
+                          onChange={() => toggleSyncPickProduct(p._id)}
+                          className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                        />
+                        <label htmlFor={`sync-pick-${sid}`} className="flex-1 cursor-pointer text-sm">
+                          <span className="font-medium text-gray-900">{p.name}</span>
+                          <span className="ml-2 text-xs text-gray-500">
+                            {p.sku ? `SKU ${p.sku}` : ''}
+                            {p.shopifyProductId ? ' · Linked' : ''}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {selectedSyncResults && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
+                <h4 className="mb-2 font-semibold text-gray-800">Last sync result</h4>
+                <p className="text-gray-600">
+                  Updated: <strong className="text-violet-700">{selectedSyncResults.updated ?? 0}</strong>
+                  {selectedSyncResults.failed?.length ? (
+                    <>
+                      {' · '}
+                      Failed: <strong className="text-red-600">{selectedSyncResults.failed.length}</strong>
+                    </>
+                  ) : null}
+                </p>
+                {selectedSyncResults.failed?.length > 0 && (
+                  <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-xs text-red-700">
+                    {selectedSyncResults.failed.map((f, i) => (
+                      <li key={i} className="rounded bg-red-50 px-2 py-1">
+                        <strong>{f.name || f.id}</strong>: {f.error}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -11,8 +11,6 @@ export default function ProductForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isEditing = !!id;
-  
-  console.log('ProductForm Render:', { id, isEditing });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -44,11 +42,9 @@ export default function ProductForm() {
   const { data: colors } = useQuery({ queryKey: ['colors'], queryFn: async () => (await colorService.getAll()).data.data });
   const { data: sizes } = useQuery({ queryKey: ['sizes'], queryFn: async () => (await sizeService.getAll()).data.data });
 
-  // Fetch product data if editing
   const { data: productData, isSuccess } = useQuery({
     queryKey: ['product', id],
     queryFn: async () => {
-      console.log('Fetching product data for ID:', id);
       const response = await productService.getOne(id);
       return response.data.data;
     },
@@ -61,8 +57,8 @@ export default function ProductForm() {
         name: productData.name,
         categoryId: productData.categoryId?._id || '',
         rayonId: productData.rayonId?._id || '',
-        price: productData.price || '',
-        buyingPrice: productData.buyingPrice || '',
+        price: productData.price ?? '',
+        buyingPrice: productData.buyingPrice ?? '',
         description: productData.description || '',
         lowStockThreshold: productData.lowStockThreshold || 10,
         fournisseurId: productData.fournisseurId?._id || '',
@@ -131,7 +127,12 @@ export default function ProductForm() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    mutation.mutate(formData);
+    const payload = {
+      ...formData,
+      price: formData.price === '' ? undefined : Number(formData.price),
+      buyingPrice: formData.buyingPrice === '' ? undefined : Number(formData.buyingPrice)
+    };
+    mutation.mutate(payload);
   };
     
   const handlePrintChanges = async () => {

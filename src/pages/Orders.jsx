@@ -12,6 +12,7 @@ const statuses = [
   'Confirmé',
   'Préparé',
   'Prêt à préparer',
+  'Imprimé',
   'Remis au transporteur',
   'Expédié',
   'Livré',
@@ -25,6 +26,7 @@ const statusGroups = [
   { label: 'Confirmed', value: 'Confirmed', color: 'bg-purple-100 text-purple-800' },
   { label: 'Processing', value: 'Processing', color: 'bg-blue-100 text-blue-800' },
   { label: 'Prêt à préparer', value: 'Prêt à préparer', color: 'bg-teal-100 text-teal-900' },
+  { label: 'Imprimé', value: 'Imprimé', color: 'bg-indigo-100 text-indigo-800' },
   { label: 'Remis transporteur', value: 'Remis au transporteur', color: 'bg-amber-100 text-amber-900' },
   { label: 'Completed', value: 'Completed', color: 'bg-green-100 text-green-800' },
   { label: 'Cancelled', value: 'Cancelled', color: 'bg-red-100 text-red-800' },
@@ -49,6 +51,7 @@ const getStatusBadge = (status) => {
           return 'badge-warning';
         case 'préparé': return 'badge-info';
         case 'prêt à préparer': return 'badge-teal';
+        case 'imprimé': return 'badge-dark';
         case 'remis au transporteur': return 'badge-warning';
         case 'expédié': return 'badge-primary';
         case 'livré':
@@ -586,6 +589,63 @@ export default function Orders() {
     }
   });
 
+  const printDeliveryPdfMutation = useMutation({
+    mutationFn: async (ids) => {
+        let openedCount = 0;
+        
+        ids.forEach(id => {
+            const order = orders.find(o => o._id === id || o._id === id.toString());
+            if (order && order.deliveryPdf) {
+                window.open(order.deliveryPdf, '_blank');
+                openedCount++;
+            }
+        });
+        
+        if (openedCount === 0) {
+            throw new Error('No delivery PDFs found for the selected orders.');
+        }
+
+        // Notify backend to update status to 'Imprimé'
+        await api.post('/delivery/bulk-mark-printed', { orderIds: ids });
+        
+        return openedCount;
+    },
+    onSuccess: (count) => {
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+        queryClient.invalidateQueries({ queryKey: ['orderStats'] });
+        toast.success(`Opened ${count} delivery labels for printing and marked as printed.`);
+        setSelectedOrderIds(new Set());
+    },
+    onError: (error) => {
+        console.error(error);
+        toast.error(error.message || 'Failed to open delivery labels');
+    }
+  });
+
+  const downloadDeliveryPdfMutation = useMutation({
+    mutationFn: async (ids) => {
+        const res = await api.post('/delivery/bulk-convert-pdf', { orderIds: ids }, { responseType: 'blob' });
+        return res.data;
+    },
+    onSuccess: (blob) => {
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+        queryClient.invalidateQueries({ queryKey: ['orderStats'] });
+        const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `delivery-labels-${Date.now()}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast.success('Delivery labels downloaded successfully');
+        setSelectedOrderIds(new Set());
+    },
+    onError: (error) => {
+        console.error(error);
+        toast.error('Failed to download delivery labels');
+    }
+  });
+
   const createBordereauMutation = useMutation({
     mutationFn: async () => {
         const orderIds = Array.from(selectedOrderIds);
@@ -602,7 +662,8 @@ export default function Orders() {
         setSelectedOrderIds(new Set());
         toast.success(`Bordereau ${data.data.code} created!`);
         // Trigger download
-        window.open(`${api.defaults.baseURL}/bordereaux/${data.data._id}/pdf`, '_blank');
+        const token = localStorage.getItem('token');
+        window.open(`${api.defaults.baseURL}/bordereaux/${data.data._id}/pdf?token=${token}`, '_blank');
         queryClient.invalidateQueries(['orders']);
     },
     onError: (error) => {
@@ -953,6 +1014,32 @@ export default function Orders() {
                         <>
                            <button className="btn btn-secondary" onClick={() => printOrdersMutation.mutate(Array.from(selectedOrderIds))} disabled={printOrdersMutation.isPending}>
                                 <FaPrint /> {printOrdersMutation.isPending ? 'Printing...' : `Print Invoices (${selectedOrderIds.size})`}
+                           </button>
+                           <button className="btn btn-secondary" onClick={() => {
+                               const selectedWithPdfs = Array.from(selectedOrderIds).filter(id => orders.find(o => o._id === id)?.deliveryPdf);
+                               if (selectedWithPdfs.length === 0) {
+                                   toast.warning("None of the selected orders have delivery PDFs.");
+                                   return;
+                               }
+                               if (selectedWithPdfs.length < selectedOrderIds.size) {
+                                   toast.info(`Opening ${selectedWithPdfs.length} orders with PDFs out of ${selectedOrderIds.size} selected.`);
+                               }
+                               printDeliveryPdfMutation.mutate(selectedWithPdfs);
+                           }} disabled={printDeliveryPdfMutation.isPending}>
+                                <FaPrint /> Open Delivery PDFs ({selectedOrderIds.size})
+                           </button>
+                           <button className="btn btn-secondary" onClick={() => {
+                               const selectedWithPdfs = Array.from(selectedOrderIds).filter(id => orders.find(o => o._id === id)?.deliveryPdf);
+                               if (selectedWithPdfs.length === 0) {
+                                   toast.warning("None of the selected orders have delivery PDFs.");
+                                   return;
+                               }
+                               if (selectedWithPdfs.length < selectedOrderIds.size) {
+                                   toast.info(`Downloading ${selectedWithPdfs.length} orders with PDFs out of ${selectedOrderIds.size} selected.`);
+                               }
+                               downloadDeliveryPdfMutation.mutate(selectedWithPdfs);
+                           }} disabled={downloadDeliveryPdfMutation.isPending}>
+                                <FaFileDownload /> {downloadDeliveryPdfMutation.isPending ? 'Generating PDFs...' : `Download Delivery PDFs (${selectedOrderIds.size})`}
                            </button>
                            {isManagerish && (
                            <button className="btn btn-secondary" onClick={() => setIsBordereauModalOpen(true)}>

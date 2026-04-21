@@ -44,6 +44,7 @@ import ClaimBordereau from './pages/ClaimBordereau'
 import ShopifySettings from './pages/ShopifySettings'
 import TimeClock from './pages/TimeClock'
 import TeamChat from './pages/TeamChat'
+import EmployeeKPIs from './pages/EmployeeKPIs'
 import { ToastContainer } from 'react-toastify'
 import { SocketProvider } from './contexts/SocketContext'
 import 'react-toastify/dist/ReactToastify.css'
@@ -92,6 +93,7 @@ function App() {
           <Route path="order-analytics" element={<OrderAnalytics />} />
           <Route path="pickups" element={<Pickups />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="employee-kpis" element={<EmployeeKPIs />} />
           <Route path="expenses" element={<Expenses />} />
           <Route path="supplier-expenses" element={<SupplierExpenses />} />
           <Route path="user-expenses-report" element={<UserExpensesReport />} />

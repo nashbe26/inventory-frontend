@@ -398,6 +398,13 @@ export default function Layout() {
                   </li>
                   {(user?.role === 'admin' || user?.role === 'manager') && (
                     <li>
+                      <NavLink to="/employee-kpis" className={({ isActive }) => isActive ? 'active' : ''}>
+                        <FaUsers /> Employee KPIs
+                      </NavLink>
+                    </li>
+                  )}
+                  {(user?.role === 'admin' || user?.role === 'manager') && (
+                    <li>
                       <NavLink to="/delivery-finance-admin" className={({ isActive }) => isActive ? 'active' : ''}>
                         <FaHandHoldingUsd /> Delivery Finance
                       </NavLink>

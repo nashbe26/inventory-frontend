@@ -522,6 +522,43 @@ export default function Orders() {
     }
   });
 
+  const syncAllStatusesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.put('/delivery/sync-all-statuses', { intervalMs: 1000 });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['orders']);
+      queryClient.invalidateQueries(['orderStats']);
+      const stats = data?.stats || {};
+      toast.success(
+        `Sync complete: ${stats.statusUpdated || 0} status updated, ${stats.stateOnlyUpdated || 0} state-only, ${stats.errors || 0} errors`
+      );
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to sync statuses');
+    }
+  });
+
+  const syncSelectedStatusesMutation = useMutation({
+    mutationFn: async (orderIds) => {
+      const res = await api.put('/delivery/sync-all-statuses', { intervalMs: 1000, orderIds: Array.from(orderIds) });
+      return res.data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries(['orders']);
+      queryClient.invalidateQueries(['orderStats']);
+      const stats = data?.stats || {};
+      toast.success(
+        `Sync selected complete: ${stats.statusUpdated || 0} status updated, ${stats.errors || 0} errors`
+      );
+      setSelectedOrderIds(new Set()); // Clear selection
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to sync selected statuses');
+    }
+  });
+
   const shopifyOrdersSyncMutation = useMutation({
     mutationFn: () => syncShopifyOrdersAllBatches({ batchSize: 200 }),
     onSuccess: (r) => {
@@ -1051,6 +1088,16 @@ export default function Orders() {
                     <button className="btn btn-secondary" onClick={() => requestPickupMutation.mutate(Array.from(selectedOrderIds))}>
                         <FaFileDownload /> Request Pickup ({selectedOrderIds.size})
                     </button>
+                    {(canOpsOrders) && (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => syncSelectedStatusesMutation.mutate(selectedOrderIds)}
+                        disabled={syncSelectedStatusesMutation.isPending}
+                        title="Sync status with First Delivery for selected orders"
+                      >
+                        <FaSync /> {syncSelectedStatusesMutation.isPending ? 'Syncing...' : `Sync Statuses (${selectedOrderIds.size})`}
+                      </button>
+                    )}
                 </>
             )}
             <button className="btn btn-primary" onClick={openNewOrderModal}>
@@ -1065,6 +1112,17 @@ export default function Orders() {
                 onClick={() => shopifyOrdersSyncMutation.mutate()}
               >
                 <FaSync /> {shopifyOrdersSyncMutation.isPending ? 'Syncing…' : 'Sync Shopify'}
+              </button>
+            )}
+            {(user.role === 'admin' || user.role === 'manager' || user.role === 'staff') && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                title="Fetch First Delivery status for orders in 'Remis au transporteur' and update local statuses"
+                disabled={syncAllStatusesMutation.isPending}
+                onClick={() => syncAllStatusesMutation.mutate()}
+              >
+                <FaSync /> {syncAllStatusesMutation.isPending ? 'Syncing Statuses…' : 'Sync All Statuses'}
               </button>
             )}
         </div>

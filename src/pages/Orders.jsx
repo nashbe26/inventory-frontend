@@ -107,6 +107,7 @@ export default function Orders() {
   const [isBordereauModalOpen, setIsBordereauModalOpen] = useState(false);
   const [selectedDeliveryMan, setSelectedDeliveryMan] = useState('');
   const [stockFilter, setStockFilter] = useState(''); // '' | 'available' | 'unavailable'
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
   const [outOfStockOrder, setOutOfStockOrder] = useState(null);
   /** One bundle price for the whole order (above line items). */
   const [bundleOrderEnabled, setBundleOrderEnabled] = useState(false);
@@ -279,7 +280,7 @@ export default function Orders() {
   };
 
   /** Row-level shelf check only (no allocation order): ok | out | unknown | none */
-  const getOrderStockDisplay = (order) => {
+  const getOrderStockDisplayBase = (order) => {
     const items = order?.items;
     if (!items?.length) return 'none';
     const checks = items.map((i) => checkStockAvailability(i));
@@ -296,28 +297,11 @@ export default function Orders() {
       .replace(/\s+/g, ' ')
       .trim() === 'pret a preparer';
 
-  /**
-   * Shelf stock display for filters: only « Prêt à préparer » orders participate.
-   * Other statuses return a sentinel so In stock / Out of stock filters do not match them.
-   */
-  const getOrderStockMapDisplay = (order) => {
-    if (!isPretAPreparerOrder(order)) return '__not_prep__';
-    return getOrderStockDisplay(order);
-  };
-
-  /** Per-line stock icons only for « Prêt à préparer » (catalog / shelf). */
-  const getLineItemStockMapAvailability = (item, order) => {
-    if (!isPretAPreparerOrder(order)) return undefined;
-    return checkStockAvailability(item);
-  };
-
-  const allFilteredOrders = orders.filter((order) => {
+  const allFilteredOrdersBase = orders.filter((order) => {
     const sTerm = searchTerm.toLowerCase().trim();
     
     // Si la recherche est vide, on garde tout
-    if (!sTerm) {
-      // (la suite vérifie les autres filtres)
-    }
+    // (la suite vérifie les autres filtres)
 
     const matchesSearch = !sTerm ||
       order.orderNumber?.toLowerCase().includes(sTerm) ||
@@ -353,18 +337,122 @@ export default function Orders() {
         return pId?.toString() === productFilter;
       });
 
-    let matchesStock = true;
-    if (stockFilter === 'available') {
-      matchesStock = getOrderStockMapDisplay(order) === 'ok';
-    } else if (stockFilter === 'unavailable') {
-      matchesStock = getOrderStockMapDisplay(order) === 'out';
-    }
-
-    return matchesSearch && matchesProduct && matchesStock;
+    return matchesSearch && matchesProduct;
   });
 
-  const pagination = { page, limit, total: allFilteredOrders.length, pages: Math.ceil(allFilteredOrders.length / limit) || 1 };
-  const filteredOrders = allFilteredOrders.slice((page - 1) * limit, page * limit);
+  const { allocatedOrders, orderStatusMap, lineStatusMap } = useMemo(() => {
+    // 1. Sort base orders
+    const sorted = [...allFilteredOrdersBase].sort((a, b) => {
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        return sortOrder === 'oldest' ? timeA - timeB : timeB - timeA;
+    });
+
+    const oStatusMap = {};
+    const lStatusMap = {};
+    
+    // Deep clone available stock from productsData
+    const stockLedger = {}; // key: variant._id or product._id -> remaining quantity
+    if (productsData?.data) {
+        productsData.data.forEach(p => {
+             if (p.variants && p.variants.length > 0) {
+                 p.variants.forEach(v => {
+                     stockLedger[idStr(v._id)] = Number(v.quantity) || 0;
+                 });
+             } else {
+                 const q = p.quantity !== undefined && p.quantity !== null ? p.quantity : p.totalQuantity;
+                 stockLedger[idStr(p._id)] = Number(q) || 0;
+             }
+        });
+    }
+
+    const finalOrders = [];
+
+    for (const order of sorted) {
+        if (!isPretAPreparerOrder(order)) {
+            oStatusMap[order._id] = '__not_prep__';
+            if (stockFilter === '') finalOrders.push(order);
+            continue;
+        }
+
+        let isOrderOk = true;
+        let isOrderUnknown = false;
+
+        order.items?.forEach(item => {
+            let required = Number(item.quantity) || 0;
+            let available = null;
+            let ledgerKey = null;
+
+            // find variant or product
+            const pId = item.productId?._id || item.productId || item.product;
+            if (pId && productsData?.data) {
+                const product = productsData.data.find(p => idStr(p._id) === idStr(pId));
+                if (product) {
+                    if (product.variants && product.variants.length > 0) {
+                        const variant = resolveVariantForLineItem(product, item);
+                        if (variant) ledgerKey = idStr(variant._id);
+                    } else {
+                        ledgerKey = idStr(product._id);
+                    }
+                }
+            }
+            
+            const lineKey = `${order._id}_${idStr(item._id)}`;
+            
+            if (ledgerKey && stockLedger[ledgerKey] !== undefined) {
+                 if (stockLedger[ledgerKey] >= required) {
+                     stockLedger[ledgerKey] -= required; // allocate stock
+                     available = true;
+                 } else {
+                     available = false;
+                 }
+            }
+            
+            lStatusMap[lineKey] = available;
+            
+            if (available === false) isOrderOk = false;
+            else if (available === null) isOrderUnknown = true;
+        });
+
+        let status = 'ok';
+        if (order.items && order.items.length === 0) status = 'none';
+        else if (!isOrderOk) status = 'out';
+        else if (isOrderUnknown) status = 'unknown';
+
+        oStatusMap[order._id] = status;
+
+        // Apply stock filter
+        let keep = true;
+        if (stockFilter === 'available' && status !== 'ok') keep = false;
+        if (stockFilter === 'unavailable' && status !== 'out') keep = false;
+        
+        if (keep) {
+            finalOrders.push(order);
+        }
+    }
+
+    return { allocatedOrders: finalOrders, orderStatusMap: oStatusMap, lineStatusMap: lStatusMap };
+  }, [allFilteredOrdersBase, productsData?.data, stockFilter, sortOrder]);
+  
+  const getOrderStockDisplay = (order) => {
+      if (orderStatusMap && orderStatusMap[order._id]) {
+          const s = orderStatusMap[order._id];
+          if (s !== '__not_prep__') return s;
+      }
+      return getOrderStockDisplayBase(order);
+  };
+
+  const getLineItemStockMapAvailability = (item, order) => {
+    if (!isPretAPreparerOrder(order)) return undefined;
+    if (lineStatusMap) {
+        const key = `${order._id}_${idStr(item._id)}`;
+        if (lineStatusMap[key] !== undefined) return lineStatusMap[key];
+    }
+    return checkStockAvailability(item);
+  };
+
+  const pagination = { page, limit, total: allocatedOrders.length, pages: Math.ceil(allocatedOrders.length / limit) || 1 };
+  const filteredOrders = allocatedOrders.slice((page - 1) * limit, page * limit);
 
   const filteredProducts = useMemo(() => {
     const q = (productSearch || '').trim().toLowerCase();
@@ -1219,6 +1307,17 @@ export default function Orders() {
                                   {product.name}
                               </option>
                           ))}
+                      </select>
+                  </div>
+                  <div style={{ minWidth: '200px' }}>
+                      <select
+                          className="form-control"
+                          value={sortOrder}
+                          onChange={(e) => setSortOrder(e.target.value)}
+                          title="Changer l'ordre de tri"
+                      >
+                          <option value="newest">Plus récent en premier (LIFO)</option>
+                          <option value="oldest">Système FIFO (Plus ancien en premier)</option>
                       </select>
                   </div>
                   <div style={{ minWidth: '200px' }}>

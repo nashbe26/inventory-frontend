@@ -35,6 +35,7 @@ import DeliveryDashboard from './pages/DeliveryDashboard'
 import DeliveryHistory from './pages/DeliveryHistory'
 import DeliveryPerformance from './pages/DeliveryPerformance'
 import DeliveryScan from './pages/DeliveryScan'
+import DeliveryHandoverScan from './pages/DeliveryHandoverScan'
 import DeliveryDeposits from './pages/DeliveryDeposits'
 import AdminDeliveryFinance from './pages/AdminDeliveryFinance'
 import DeliveryTeam from './pages/DeliveryTeam'
@@ -106,6 +107,7 @@ function App() {
           <Route path="delivery-finance-admin" element={<AdminDeliveryFinance />} />
           <Route path="delivery-analytics" element={<DeliveryTeam />} />
           <Route path="delivery-scan" element={<DeliveryScan />} />
+          <Route path="delivery-handover-scan" element={<DeliveryHandoverScan />} />
           <Route path="claim-order/:id" element={<ClaimOrder />} />
           <Route path="claim-bordereau/:code" element={<ClaimBordereau />} />
           <Route path="delivery-team" element={<DeliveryTeam />} />

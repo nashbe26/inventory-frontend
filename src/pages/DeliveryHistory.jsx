@@ -16,9 +16,12 @@ function getCashCollected(order) {
   return 0;
 }
 
+function getCompletionDate(order) {
+  return order.deliveryCompletedAt || order.deliveredAt || order.updatedAt;
+}
+
 function getDateKey(order) {
-  const date = order.deliveredAt || order.updatedAt;
-  return new Date(date).toLocaleDateString('fr-TN', {
+  return new Date(getCompletionDate(order)).toLocaleDateString('fr-TN', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -140,7 +143,7 @@ export default function DeliveryHistory() {
                       <tbody className="divide-y divide-gray-100">
                         {dayOrders.map(order => {
                           const earning = getOrderEarning(order.status);
-                          const dateObj = new Date(order.deliveredAt || order.updatedAt);
+                          const dateObj = new Date(order.deliveryCompletedAt || order.deliveredAt || order.updatedAt);
                           return (
                             <tr key={order._id} className="hover:bg-gray-50">
                               <td className="p-4 font-bold text-indigo-700">#{order.orderNumber}</td>

@@ -22,7 +22,7 @@ function isToday(dateStr) {
 
 function computeTodayStats(history) {
   const todayDelivered = history.filter(o =>
-    DELIVERED.includes(o.status) && isToday(o.deliveredAt || o.updatedAt)
+    DELIVERED.includes(o.status) && isToday(o.deliveryCompletedAt || o.deliveredAt || o.updatedAt)
   );
   const cashCollected = todayDelivered.reduce(
     (sum, o) => sum + (o.paymentMethod === 'Espèces' ? (o.total || 0) : 0),

@@ -275,6 +275,11 @@ export default function Layout() {
                 <FaComments /> Team chat
               </NavLink>
             </li>
+            <li>
+              <NavLink to="/organization" className={({ isActive }) => isActive ? 'active' : ''}>
+                <FaCogs /> Organization
+              </NavLink>
+            </li>
 
             {/* Operations Group */}
             <li className="menu-group">
@@ -490,11 +495,6 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
-          {user?.role !== 'delivery_man' && user?.role !== 'staff' && (
-            <NavLink to="/organization" className={({ isActive }) => isActive ? 'active' : ''}>
-              <FaCogs /> Organization
-            </NavLink>
-          )}
           {(user?.role === 'admin' || user?.role === 'manager') && (
             <NavLink to="/shopify-settings" className={({ isActive }) => isActive ? 'active' : ''}>
               <FaShopify /> Shopify

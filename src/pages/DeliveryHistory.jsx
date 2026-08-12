@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { DELIVERY_FEE } from '../config/constants';
 
-const DELIVERY_FEE = 7; // DT per delivered order
 const DELIVERED = ['Livré', 'Livrée'];
 
-function getOrderEarning(status) {
-  return DELIVERED.includes(status) ? DELIVERY_FEE : 0;
+function getOrderEarning(status, deliveryFee) {
+  return DELIVERED.includes(status) ? deliveryFee : 0;
 }
 
 // Only COD (Espèces) delivered orders involve physical cash collection
@@ -51,6 +51,7 @@ export default function DeliveryHistory() {
   const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deliveryFee, setDeliveryFee] = useState(DELIVERY_FEE);
 
   useEffect(() => {
     fetchHistory();
@@ -59,8 +60,12 @@ export default function DeliveryHistory() {
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/internal-delivery/my-history');
-      setOrders(res.data);
+      const [historyRes, orgRes] = await Promise.all([
+        api.get('/internal-delivery/my-history'),
+        api.get('/organizations/my/organization'),
+      ]);
+      setOrders(historyRes.data);
+      setDeliveryFee(orgRes.data?.settings?.deliveryFee ?? DELIVERY_FEE);
     } catch (error) {
       console.error('Error fetching history:', error);
     } finally {
@@ -68,7 +73,7 @@ export default function DeliveryHistory() {
     }
   };
 
-  const totalEarnings = orders.reduce((sum, o) => sum + getOrderEarning(o.status), 0);
+  const totalEarnings = orders.reduce((sum, o) => sum + getOrderEarning(o.status, deliveryFee), 0);
   const totalCashCollected = orders.reduce((sum, o) => sum + getCashCollected(o), 0);
   const totalToDeposit = totalCashCollected - totalEarnings;
   const deliveredCount = orders.filter(o => DELIVERED.includes(o.status)).length;
@@ -108,7 +113,7 @@ export default function DeliveryHistory() {
           {/* Per-date groups */}
           <div className="space-y-6">
             {[...groupedByDate.entries()].map(([date, dayOrders]) => {
-              const dayEarnings = dayOrders.reduce((sum, o) => sum + getOrderEarning(o.status), 0);
+              const dayEarnings = dayOrders.reduce((sum, o) => sum + getOrderEarning(o.status, deliveryFee), 0);
               const dayCashCollected = dayOrders.reduce((sum, o) => sum + getCashCollected(o), 0);
               const dayToDeposit = dayCashCollected - dayEarnings;
               const dayDelivered = dayOrders.filter(o => DELIVERED.includes(o.status)).length;
@@ -142,7 +147,7 @@ export default function DeliveryHistory() {
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {dayOrders.map(order => {
-                          const earning = getOrderEarning(order.status);
+                          const earning = getOrderEarning(order.status, deliveryFee);
                           const dateObj = new Date(order.deliveryCompletedAt || order.deliveredAt || order.updatedAt);
                           return (
                             <tr key={order._id} className="hover:bg-gray-50">
@@ -175,7 +180,7 @@ export default function DeliveryHistory() {
                         {/* Daily subtotal rows */}
                         <tr className="bg-indigo-50 border-t border-indigo-100">
                           <td colSpan={7} className="px-4 pt-3 pb-1 text-right text-sm font-semibold text-indigo-700">
-                            Delivery earnings ({dayDelivered} × {DELIVERY_FEE} DT)
+                            Delivery earnings ({dayDelivered} × {deliveryFee} DT)
                           </td>
                           <td className="px-4 pt-3 pb-1 font-bold text-indigo-700">{dayEarnings} DT</td>
                         </tr>

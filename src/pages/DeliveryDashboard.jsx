@@ -7,8 +7,8 @@ import {
   FaTruck, FaMoneyBillWave, FaHandHoldingUsd
 } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import { DELIVERY_FEE } from '../config/constants';
 
-const DELIVERY_FEE = 7;
 const DELIVERED = ['Livré', 'Livrée'];
 
 function isToday(dateStr) {
@@ -20,7 +20,7 @@ function isToday(dateStr) {
     && d.getDate() === now.getDate();
 }
 
-function computeTodayStats(history) {
+function computeTodayStats(history, deliveryFee) {
   const todayDelivered = history.filter(o =>
     DELIVERED.includes(o.status) && isToday(o.deliveryCompletedAt || o.deliveredAt || o.updatedAt)
   );
@@ -30,7 +30,7 @@ function computeTodayStats(history) {
   );
   return {
     delivered: todayDelivered.length,
-    earnings: todayDelivered.length * DELIVERY_FEE,
+    earnings: todayDelivered.length * deliveryFee,
     cashCollected,
   };
 }
@@ -286,6 +286,7 @@ export default function DeliveryDashboard() {
   const [loading, setLoading] = useState(true);
   const [deliverModal, setDeliverModal] = useState(null);
   const [statusModal, setStatusModal] = useState(null);
+  const [deliveryFee, setDeliveryFee] = useState(DELIVERY_FEE);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -295,12 +296,14 @@ export default function DeliveryDashboard() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [deliveriesRes, historyRes] = await Promise.all([
+      const [deliveriesRes, historyRes, orgRes] = await Promise.all([
         api.get('/internal-delivery/my-deliveries'),
         api.get('/internal-delivery/my-history'),
+        api.get('/organizations/my/organization'),
       ]);
       setMyDeliveries(deliveriesRes.data);
       setHistory(historyRes.data);
+      setDeliveryFee(orgRes.data?.settings?.deliveryFee ?? DELIVERY_FEE);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -308,7 +311,7 @@ export default function DeliveryDashboard() {
     }
   };
 
-  const todayStats = computeTodayStats(history);
+  const todayStats = computeTodayStats(history, deliveryFee);
 
   const confirmDelivered = async () => {
     try {

@@ -44,7 +44,6 @@ api.interceptors.response.use(
 export const organizationAPI = {
   create: (data) => api.post('/organizations', data),
   getMy: () => api.get('/organizations/my/organization'),
-  getMe: () => api.get('/users/me'), // Add this line
   get: (id) => api.get(`/organizations/${id}`),
   update: (id, data) => api.put(`/organizations/${id}`, data),
   delete: (id) => api.delete(`/organizations/${id}`),

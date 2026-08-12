@@ -3,17 +3,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { organizationAPI } from '../services/api';
-import { FiUsers, FiMail, FiTrash2, FiUserPlus, FiCopy, FiCheck } from 'react-icons/fi';
+import { useAuth } from '../contexts/AuthContext';
+import { FiUsers, FiMail, FiTrash2, FiUserPlus, FiCopy, FiCheck, FiSettings } from 'react-icons/fi';
 import { FaTruck } from 'react-icons/fa';
+import { DELIVERY_FEE } from '../config/constants';
 
 const OrganizationManagement = () => {
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteData, setInviteData] = useState({ email: '', role: 'staff' });
   const [copiedToken, setCopiedToken] = useState(null);
   const [confirmRemove, setConfirmRemove] = useState(null); // { userId, userName }
   const [activeTab, setActiveTab] = useState('members');
+  const [deliveryFeeInput, setDeliveryFeeInput] = useState('');
 
   // Fetch organization data
   const { data: organization, isLoading, error } = useQuery({
@@ -33,15 +37,12 @@ const OrganizationManagement = () => {
     }
   }, [error, navigate]);
 
-  // Fetch current user to check role
-  const { data: currentUser } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      // Assuming you have an API endpoint to get the current user
-      const response = await organizationAPI.getMe(); 
-      return response.data;
-    },
-  });
+  // Sync the delivery fee input once the organization loads
+  useEffect(() => {
+    if (organization) {
+      setDeliveryFeeInput(String(organization.settings?.deliveryFee ?? DELIVERY_FEE));
+    }
+  }, [organization]);
 
   // Fetch invitations
   const { data: invitations } = useQuery({
@@ -117,6 +118,28 @@ const OrganizationManagement = () => {
       toast.error(error.response?.data?.message || 'Erreur lors de la mise à jour du rôle');
     }
   });
+
+  // Update delivery fee mutation
+  const updateSettingsMutation = useMutation({
+    mutationFn: (settings) => organizationAPI.update(organization._id, { settings }),
+    onSuccess: () => {
+      toast.success('Frais de livraison mis à jour');
+      queryClient.invalidateQueries(['my-organization']);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Erreur lors de la mise à jour des frais de livraison');
+    }
+  });
+
+  const handleSaveDeliveryFee = (e) => {
+    e.preventDefault();
+    const fee = Number(deliveryFeeInput);
+    if (Number.isNaN(fee) || fee < 0) {
+      toast.error('Merci de saisir un montant valide');
+      return;
+    }
+    updateSettingsMutation.mutate({ deliveryFee: fee });
+  };
 
   const handleInvite = (e) => {
     e.preventDefault();
@@ -258,6 +281,18 @@ const OrganizationManagement = () => {
                             </span>
                         )}
                     </button>
+                    {['owner', 'admin'].includes(currentUser?.role) && (
+                        <button
+                            onClick={() => setActiveTab('settings')}
+                            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                                activeTab === 'settings'
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            Paramètres
+                        </button>
+                    )}
                 </nav>
             </div>
         </div>
@@ -384,6 +419,41 @@ const OrganizationManagement = () => {
                             <p className="mt-1 text-sm text-gray-500">Les nouvelles invitations que vous envoyez apparaîtront ici.</p>
                         </div>
                     )}
+                </div>
+            )}
+
+            {activeTab === 'settings' && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-w-md">
+                    <div className="flex items-center gap-2 mb-4">
+                        <FiSettings className="text-gray-400" />
+                        <h3 className="text-lg font-semibold text-gray-900">Frais de livraison</h3>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-4">
+                        Montant versé au livreur pour chaque commande livrée. Utilisé pour calculer les gains des livreurs.
+                    </p>
+                    <form onSubmit={handleSaveDeliveryFee} className="flex items-end gap-3">
+                        <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Montant (DT)
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                required
+                                value={deliveryFeeInput}
+                                onChange={(e) => setDeliveryFeeInput(e.target.value)}
+                                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={updateSettingsMutation.isPending}
+                            className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                            {updateSettingsMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
+                        </button>
+                    </form>
                 </div>
             )}
         </div>

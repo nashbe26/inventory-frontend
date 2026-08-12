@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaClipboardList, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle, FaCopy, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import api, { syncShopifyOrdersAllBatches } from '../services/api';
+import api, { syncShopifyOrdersAllBatches, organizationAPI } from '../services/api';
 import Modal from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeCanvas } from 'qrcode.react';
+import { DELIVERY_FEE } from '../config/constants';
 
 const statuses = [
   'En Attente',
@@ -99,7 +100,7 @@ export default function Orders() {
   const [source, setSource] = useState('Direct');
   const [notes, setNotes] = useState('');
   const [isExchange, setIsExchange] = useState(false);
-  const [shipping, setShipping] = useState(8);
+  const [shipping, setShipping] = useState(DELIVERY_FEE);
   const [productSearch, setProductSearch] = useState('');
   const [variantPickerProduct, setVariantPickerProduct] = useState(null);
   const [variantFilter, setVariantFilter] = useState('');
@@ -178,6 +179,16 @@ export default function Orders() {
     if (!bundleOrderEnabled || !orderItems.length) return orderItems;
     return allocateBundleUnitPrices(orderItems, bundleSubtotalInput);
   }, [bundleOrderEnabled, bundleSubtotalInput, orderItems, productsData]);
+
+  const { data: orgData } = useQuery({
+    queryKey: ['my-organization-settings'],
+    queryFn: async () => {
+      const res = await organizationAPI.getMy();
+      return res.data;
+    },
+    staleTime: 5 * 60 * 1000
+  });
+  const deliveryFee = orgData?.settings?.deliveryFee ?? DELIVERY_FEE;
 
   const { data: deliveryMenData } = useQuery({
     queryKey: ['deliveryMen'],
@@ -502,7 +513,7 @@ export default function Orders() {
     setSource('Direct');
     setNotes('');
     setIsExchange(false);
-    setShipping(8);
+    setShipping(deliveryFee);
     setProductSearch('');
     setVariantPickerProduct(null);
     setVariantFilter('');
@@ -993,7 +1004,7 @@ export default function Orders() {
     setSource(order.source || 'Direct');
     setNotes(order.notes || '');
     setIsExchange(Boolean(order.isExchange));
-    setShipping(order.shipping || 8);
+    setShipping(order.shipping ?? deliveryFee);
     setVariantPickerProduct(null);
     setVariantFilter('');
 

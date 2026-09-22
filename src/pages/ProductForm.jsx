@@ -18,6 +18,7 @@ export default function ProductForm() {
     rayonId: '',
     fournisseurId: '',
     materialId: '',
+    sizeScale: '',
     price: '',
     buyingPrice: '',
     description: '',
@@ -41,6 +42,21 @@ export default function ProductForm() {
   const { data: materials } = useQuery({ queryKey: ['materials'], queryFn: async () => (await materialService.getAll()).data.data });
   const { data: colors } = useQuery({ queryKey: ['colors'], queryFn: async () => (await colorService.getAll()).data.data });
   const { data: sizes } = useQuery({ queryKey: ['sizes'], queryFn: async () => (await sizeService.getAll()).data.data });
+  const { data: sizeScales } = useQuery({ queryKey: ['size-scales'], queryFn: async () => (await sizeService.getScales()).data.data });
+
+  /**
+   * Sizes offered in the variant grid. A product declares which scale its
+   * variants come from, so a t-shirt lists S/M/L rather than every size in the
+   * catalog. With no scale chosen we fall back to showing everything, which is
+   * how the form behaved before scales existed.
+   *
+   * Sizes already used by an existing variant are always included, so editing a
+   * product never silently hides a size it is actually using.
+   */
+  const usedSizeIds = new Set((formData.variants || []).map(v => String(v.sizeId)));
+  const visibleSizes = (sizes || []).filter(s =>
+    !formData.sizeScale || s.scale === formData.sizeScale || usedSizeIds.has(String(s._id))
+  );
 
   const { data: productData, isSuccess } = useQuery({
     queryKey: ['product', id],
@@ -63,6 +79,7 @@ export default function ProductForm() {
         lowStockThreshold: productData.lowStockThreshold || 10,
         fournisseurId: productData.fournisseurId?._id || '',
         materialId: productData.materialId?._id || '',
+        sizeScale: productData.sizeScale || '',
         variants: productData.variants.map(v => ({
              colorId: v.colorId?._id || v.colorId,
              sizeId: v.sizeId?._id || v.sizeId,
@@ -215,7 +232,7 @@ export default function ProductForm() {
 
   const setAllQuantities = (qty) => {
       const newQuantities = {};
-      sizes?.forEach(s => {
+      visibleSizes.forEach(s => {
           newQuantities[s._id] = qty;
       });
       setVariantQuantities(newQuantities);
@@ -315,6 +332,23 @@ export default function ProductForm() {
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Size scale</label>
+              <select
+                value={formData.sizeScale}
+                onChange={(e) => setFormData({ ...formData, sizeScale: e.target.value })}
+                className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All sizes</option>
+                {sizeScales?.map(s => (
+                  <option key={s.scale} value={s.scale}>{s.scale} ({s.count})</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Limits the size grid below to one scale, so a garment does not list shoe sizes.
+              </p>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Selling Price</label>
               <input
                 type="number"
@@ -396,7 +430,7 @@ export default function ProductForm() {
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">Enter Quantities for Sizes</label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                            {sizes?.map(size => {
+                            {visibleSizes.map(size => {
                                 const currentQty = variantQuantities[size._id] || '';
                                 return (
                                     <div key={size._id} className="bg-white p-2 border rounded flex flex-col items-center">

@@ -17,7 +17,9 @@ export const colorService = {
 };
 
 export const sizeService = {
-  getAll: () => api.get('/sizes'),
+  getAll: (scale) => api.get('/sizes', scale ? { params: { scale } } : undefined),
+  /** Distinct size scales for the org, with a count of sizes in each. */
+  getScales: () => api.get('/sizes/scales'),
   getOne: (id) => api.get(`/sizes/${id}`),
   create: (data) => api.post('/sizes', data),
   update: (id, data) => api.put(`/sizes/${id}`, data),

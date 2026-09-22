@@ -7,12 +7,12 @@ const SocketContext = createContext(null);
 
 /** Socket.io must use the API origin, not a path like /api-inventory. */
 function getSocketBaseUrl() {
-  const raw = import.meta.env.VITE_API_URL || 'https://tndeals.store';
+  const raw = import.meta.env.VITE_API_URL || 'http://localhost:3009';
   try {
     const u = new URL(raw.includes('://') ? raw : `http://${raw}`);
     return u.origin;
   } catch {
-    return String(raw).replace(/\/api-inventory\/?.*$/, '').replace(/\/$/, '') || 'https://tndeals.store';
+    return String(raw).replace(/\/api-inventory\/?.*$/, '').replace(/\/$/, '') || 'http://localhost:3009';
   }
 }
 

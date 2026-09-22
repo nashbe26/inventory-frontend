@@ -20,12 +20,7 @@ import PrepareScan from './pages/PrepareScan'
 import History from './pages/History'
 import BulkGeneration from './pages/BulkGeneration'
 import Orders from './pages/Orders'
-import Analytics from './pages/Analytics'
 import OrderAnalytics from './pages/OrderAnalytics'
-import Expenses from './pages/Expenses'
-import SupplierExpenses from './pages/SupplierExpenses'
-import UserExpensesReport from './pages/UserExpensesReport'
-import Recette from './pages/Recette'
 import Materials from './pages/Materials'
 import OrganizationSetup from './pages/OrganizationSetup'
 import OrganizationManagement from './pages/OrganizationManagement'
@@ -36,8 +31,6 @@ import DeliveryHistory from './pages/DeliveryHistory'
 import DeliveryPerformance from './pages/DeliveryPerformance'
 import DeliveryScan from './pages/DeliveryScan'
 import DeliveryHandoverScan from './pages/DeliveryHandoverScan'
-import DeliveryDeposits from './pages/DeliveryDeposits'
-import AdminDeliveryFinance from './pages/AdminDeliveryFinance'
 import DeliveryTeam from './pages/DeliveryTeam'
 import Bordereaux from './pages/Bordereaux'
 import ClaimOrder from './pages/ClaimOrder'
@@ -45,7 +38,6 @@ import ClaimBordereau from './pages/ClaimBordereau'
 import ShopifySettings from './pages/ShopifySettings'
 import TimeClock from './pages/TimeClock'
 import TeamChat from './pages/TeamChat'
-import EmployeeKPIs from './pages/EmployeeKPIs'
 import { ToastContainer } from 'react-toastify'
 import { SocketProvider } from './contexts/SocketContext'
 import 'react-toastify/dist/ReactToastify.css'
@@ -93,18 +85,10 @@ function App() {
           <Route path="orders" element={<Orders />} />
           <Route path="order-analytics" element={<OrderAnalytics />} />
           <Route path="pickups" element={<Pickups />} />
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="employee-kpis" element={<EmployeeKPIs />} />
-          <Route path="expenses" element={<Expenses />} />
-          <Route path="supplier-expenses" element={<SupplierExpenses />} />
-          <Route path="user-expenses-report" element={<UserExpensesReport />} />
-          <Route path="recettes" element={<Recette />} />
           <Route path="organization" element={<OrganizationManagement />} />
           <Route path="delivery-dashboard" element={<DeliveryDashboard />} />
           <Route path="delivery-history" element={<DeliveryHistory />} />
           <Route path="delivery-performance" element={<DeliveryPerformance />} />
-          <Route path="delivery-deposits" element={<DeliveryDeposits />} />
-          <Route path="delivery-finance-admin" element={<AdminDeliveryFinance />} />
           <Route path="delivery-analytics" element={<DeliveryTeam />} />
           <Route path="delivery-scan" element={<DeliveryScan />} />
           <Route path="delivery-handover-scan" element={<DeliveryHandoverScan />} />

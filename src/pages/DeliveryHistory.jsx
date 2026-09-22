@@ -75,7 +75,6 @@ export default function DeliveryHistory() {
 
   const totalEarnings = orders.reduce((sum, o) => sum + getOrderEarning(o.status, deliveryFee), 0);
   const totalCashCollected = orders.reduce((sum, o) => sum + getCashCollected(o), 0);
-  const totalToDeposit = totalCashCollected - totalEarnings;
   const deliveredCount = orders.filter(o => DELIVERED.includes(o.status)).length;
   const groupedByDate = groupOrdersByDate(orders);
 
@@ -106,7 +105,6 @@ export default function DeliveryHistory() {
             <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
               <div className="text-2xl font-bold text-orange-600">{totalCashCollected} DT</div>
               <div className="text-sm text-gray-500 mt-1">Cash collected</div>
-              <div className="text-xs text-gray-400 mt-1">To deposit: {totalToDeposit} DT</div>
             </div>
           </div>
 
@@ -115,7 +113,6 @@ export default function DeliveryHistory() {
             {[...groupedByDate.entries()].map(([date, dayOrders]) => {
               const dayEarnings = dayOrders.reduce((sum, o) => sum + getOrderEarning(o.status, deliveryFee), 0);
               const dayCashCollected = dayOrders.reduce((sum, o) => sum + getCashCollected(o), 0);
-              const dayToDeposit = dayCashCollected - dayEarnings;
               const dayDelivered = dayOrders.filter(o => DELIVERED.includes(o.status)).length;
 
               return (
@@ -189,12 +186,6 @@ export default function DeliveryHistory() {
                             Cash collected (Espèces)
                           </td>
                           <td className="px-4 pt-1 pb-1 font-bold text-orange-600">{dayCashCollected} DT</td>
-                        </tr>
-                        <tr className="bg-indigo-50 border-b border-indigo-100">
-                          <td colSpan={7} className="px-4 pt-1 pb-3 text-right text-sm font-semibold text-gray-600">
-                            To deposit
-                          </td>
-                          <td className="px-4 pt-1 pb-3 font-bold text-gray-700">{dayToDeposit} DT</td>
                         </tr>
                       </tbody>
                     </table>

@@ -16,10 +16,7 @@ import {
   FaShoppingCart,
   FaChartBar,
   FaUsers,
-  FaMoneyBillWave,
-  FaHandHoldingUsd,
   FaTruck,
-  FaWallet,
   FaChevronDown,
   FaChevronRight,
   FaClipboardList,
@@ -75,7 +72,6 @@ export default function Layout() {
   
   const [expandedGroups, setExpandedGroups] = useState({
     operations: true,
-    finance: true,
     inventory: true,
     delivery: true
   });
@@ -133,11 +129,6 @@ export default function Layout() {
                   <li>
                     <NavLink to="/delivery-performance" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaChartBar /> Performance
-                    </NavLink>
-                  </li>
-                  <li>
-                    <NavLink to="/delivery-deposits" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaMoneyBillWave /> My Deposits
                     </NavLink>
                   </li>
                   <li>
@@ -375,69 +366,10 @@ export default function Layout() {
                       <FaChartBar /> Performance
                     </NavLink>
                   </li>
-                  <li>
-                    <NavLink to="/delivery-deposits" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaMoneyBillWave /> My Deposits
-                    </NavLink>
-                  </li>
                 </ul>
               )}
             </li>
             )}
-
-            {/* Finance Group */}
-            <li className="menu-group">
-              <div className="menu-group-header" onClick={() => toggleGroup('finance')}>
-                <span className="group-label">
-                  <FaChartBar /> Finance
-                </span>
-                {expandedGroups.finance ? <FaChevronDown className="arrow" /> : <FaChevronRight className="arrow" />}
-              </div>
-              
-              {expandedGroups.finance && (
-                <ul className="submenu">
-                   <li>
-                    <NavLink to="/analytics" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaChartBar /> Analytics
-                    </NavLink>
-                  </li>
-                  {(user?.role === 'admin' || user?.role === 'manager') && (
-                    <li>
-                      <NavLink to="/employee-kpis" className={({ isActive }) => isActive ? 'active' : ''}>
-                        <FaUsers /> Employee KPIs
-                      </NavLink>
-                    </li>
-                  )}
-                  {(user?.role === 'admin' || user?.role === 'manager') && (
-                    <li>
-                      <NavLink to="/delivery-finance-admin" className={({ isActive }) => isActive ? 'active' : ''}>
-                        <FaHandHoldingUsd /> Delivery Finance
-                      </NavLink>
-                    </li>
-                  )}
-                  <li>
-                    <NavLink to="/expenses" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaMoneyBillWave /> Expenses
-                    </NavLink>
-                  </li>
-                  <li>
-                    <NavLink to="/supplier-expenses" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaHandHoldingUsd /> Supplier Expenses
-                    </NavLink>
-                  </li>
-                  <li>
-                    <NavLink to="/user-expenses-report" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaUsers /> Expenses by User
-                    </NavLink>
-                  </li>
-                  <li>
-                    <NavLink to="/recettes" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaWallet /> Recettes
-                    </NavLink>
-                  </li>
-                </ul>
-              )}
-            </li>
 
             {/* Inventory Group */}
             <li className="menu-group">

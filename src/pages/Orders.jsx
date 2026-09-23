@@ -7,6 +7,18 @@ import Modal from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeCanvas } from 'qrcode.react';
 import { DELIVERY_FEE } from '../config/constants';
+import {
+  Toolbar,
+  SearchInput,
+  Select,
+  Tabs,
+  PageNav,
+  StatTile
+} from '../components/ui/Primitives';
+
+/** Tunisian dinar. The old tiles printed a lowercase "dt" with no grouping. */
+const dtAmount = (n) =>
+  `${Number(n || 0).toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DT`;
 
 const statuses = [
   'En Attente',
@@ -126,6 +138,23 @@ export default function Orders() {
         return res.data?.data; // { total, pending, processing, completed, cancelled }
     },
   });
+
+  /* Map the stats payload onto the tab values, so each tab shows how many
+     orders its filter would return. Keys match statusGroups[].value. */
+  const statusCounts = useMemo(() => {
+    const s = statsData || {};
+    return {
+      '': s.total?.count,
+      Pending: s.pending?.count,
+      Confirmed: s.confirmed?.count,
+      Processing: s.processing?.count,
+      'Prêt à préparer': s.readyToPrepare?.count,
+      'Remis au transporteur': s.atCarrier?.count,
+      Completed: s.completed?.count,
+      Cancelled: s.cancelled?.count,
+      NRP: s.nrp?.count
+    };
+  }, [statsData]);
 
   const { data: ordersData, isLoading } = useQuery({
     queryKey: ['orders', statusFilter],
@@ -1227,148 +1256,80 @@ export default function Orders() {
         </div>
       </div>
 
+      {/* Three summary tiles. The per-status counts used to be nine coloured
+          tiles here, which wrapped to 4+4+1 and left a gap; they now sit as
+          counts on the status tabs, beside the filter they correspond to. */}
       <div className="stats-grid">
-        <div className="stat-card">
-          <h3>Total Orders</h3>
-          <div className="stat-value">{statsData?.total?.count || 0}</div>
-          <div className="stat-label">{statsData?.total?.amount?.toFixed(2)} dt</div>
-        </div>
-        <div className="stat-card">
-          <h3>Pending</h3>
-          <div className="stat-value" style={{ color: 'var(--warning-color)' }}>
-            {statsData?.pending?.count || 0}
-          </div>
-           <div className="stat-label">{statsData?.pending?.amount?.toFixed(2)} dt</div>
-        </div>
-        <div className="stat-card">
-          <h3>Confirmed</h3>
-          <div className="stat-value" style={{ color: 'var(--purple-color, #9c27b0)' }}>
-             {statsData?.confirmed?.count || 0}
-          </div>
-           <div className="stat-label">{statsData?.confirmed?.amount?.toFixed(2)} dt</div>
-        </div>
-        <div className="stat-card">
-          <h3>In Process</h3>
-          <div className="stat-value" style={{ color: 'var(--info-color)' }}>
-             {statsData?.processing?.count || 0}
-          </div>
-           <div className="stat-label">{statsData?.processing?.amount?.toFixed(2)} dt</div>
-        </div>
-        <div className="stat-card">
-          <h3>Prêt à préparer</h3>
-          <div className="stat-value" style={{ color: '#0f766e' }}>
-            {statsData?.readyToPrepare?.count ?? 0}
-          </div>
-          <div className="stat-label">{(statsData?.readyToPrepare?.amount ?? 0).toFixed(2)} dt</div>
-        </div>
-        <div className="stat-card">
-          <h3>Remis transporteur</h3>
-          <div className="stat-value" style={{ color: '#b45309' }}>
-            {statsData?.atCarrier?.count ?? 0}
-          </div>
-          <div className="stat-label">{(statsData?.atCarrier?.amount ?? 0).toFixed(2)} dt</div>
-        </div>
-        <div className="stat-card">
-          <h3>Completed</h3>
-          <div className="stat-value" style={{ color: 'var(--success-color)' }}>
-             {statsData?.completed?.count || 0}
-          </div>
-           <div className="stat-label">{statsData?.completed?.amount?.toFixed(2)} dt</div>
-        </div>
-         <div className="stat-card">
-          <h3>Cancelled</h3>
-          <div className="stat-value" style={{ color: 'var(--danger-color)' }}>
-             {statsData?.cancelled?.count || 0}
-          </div>
-           <div className="stat-label">{statsData?.cancelled?.amount?.toFixed(2)} dt</div>
-        </div>
-        <div className="stat-card">
-          <h3>NRP</h3>
-          <div className="stat-value" style={{ color: 'var(--secondary-color, #6c757d)' }}>
-             {statsData?.nrp?.count || 0}
-          </div>
-           <div className="stat-label">{statsData?.nrp?.amount?.toFixed(2)} dt</div>
-        </div>
+        <StatTile
+          label="Total orders"
+          value={(statsData?.total?.count || 0).toLocaleString("fr-TN")}
+          hint={dtAmount(statsData?.total?.amount)}
+        />
+        <StatTile
+          label="Awaiting action"
+          value={((statsData?.pending?.count || 0) + (statsData?.confirmed?.count || 0)).toLocaleString("fr-TN")}
+          hint="Pending and confirmed"
+          tone={(statsData?.pending?.count || 0) > 0 ? "warning" : "default"}
+        />
+        <StatTile
+          label="In transit"
+          value={((statsData?.atCarrier?.count || 0) + (statsData?.processing?.count || 0)).toLocaleString("fr-TN")}
+          hint="With the carrier or being prepared"
+        />
+        <StatTile
+          label="Delivered"
+          value={(statsData?.completed?.count || 0).toLocaleString("fr-TN")}
+          hint={dtAmount(statsData?.completed?.amount)}
+        />
       </div>
 
       <div className="card" style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-             {/* Search and Filters */}
-             <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div className="search-box" style={{ flex: 1, minWidth: '300px' }}>
-                    <FaSearch className="search-icon" />
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Search orders..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                  
-                  <div style={{ minWidth: '200px' }}>
-                      <select 
-                          className="form-control" 
-                          value={productFilter} 
-                          onChange={(e) => setProductFilter(e.target.value)}
-                      >
-                          <option value="">All Products</option>
-                          {productsData?.data?.map(product => (
-                              <option key={product._id} value={product._id}>
-                                  {product.name}
-                              </option>
-                          ))}
-                      </select>
-                  </div>
-                  <div style={{ minWidth: '200px' }}>
-                      <select
-                          className="form-control"
-                          value={sortOrder}
-                          onChange={(e) => setSortOrder(e.target.value)}
-                          title="Changer l'ordre de tri"
-                      >
-                          <option value="newest">Plus récent en premier (LIFO)</option>
-                          <option value="oldest">Système FIFO (Plus ancien en premier)</option>
-                      </select>
-                  </div>
-                  <div style={{ minWidth: '200px' }}>
-                      <select
-                          className="form-control"
-                          value={stockFilter}
-                          onChange={(e) => setStockFilter(e.target.value)}
-                          title="Only orders in « Prêt à préparer » are matched: In stock / Out of stock use catalog shelf quantities. Other statuses are hidden when this filter is set."
-                      >
-                          <option value="">All Stock</option>
-                          <option value="available">In Stock</option>
-                          <option value="unavailable">Out of Stock</option>
-                      </select>
-                  </div>
-             </div>
+        {/* min-w-0 lets the tab strip below scroll rather than widening the page. */}
+        <div className="min-w-0" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+             {/* Search and filters */}
+             <Toolbar className="!mb-0">
+               <SearchInput
+                 value={searchTerm}
+                 onChange={setSearchTerm}
+                 placeholder="Search by customer, phone or order number…"
+               />
+               <Select
+                 value={productFilter}
+                 onChange={setProductFilter}
+                 placeholder="All products"
+                 options={(productsData?.data || []).map((p) => ({ value: p._id, label: p.name }))}
+               />
+               <Select
+                 value={sortOrder}
+                 onChange={setSortOrder}
+                 options={[
+                   { value: 'newest', label: 'Newest first (LIFO)' },
+                   { value: 'oldest', label: 'Oldest first (FIFO)' }
+                 ]}
+               />
+               <Select
+                 value={stockFilter}
+                 onChange={setStockFilter}
+                 placeholder="Any stock"
+                 options={[
+                   { value: 'available', label: 'In stock' },
+                   { value: 'unavailable', label: 'Out of stock' }
+                 ]}
+               />
+             </Toolbar>
 
-             {/* Status Tabs */}
-             <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '5px' }}>
-                {statusGroups.map((group) => (
-                    <button
-                        key={group.value}
-                        onClick={() => setStatusFilter(group.value)}
-                        className={`status-tab ${statusFilter === group.value ? 'active' : ''}`}
-                        style={{
-                            padding: '0.5rem 1rem',
-                            borderRadius: '9999px',
-                            border: statusFilter === group.value ? '1px solid var(--primary-color)' : '1px solid transparent',
-                            cursor: 'pointer',
-                            fontSize: '0.875rem',
-                            fontWeight: statusFilter === group.value ? '600' : '500',
-                            backgroundColor: statusFilter === group.value ? 'var(--primary-color)' : 'var(--bg-secondary)',
-                            color: statusFilter === group.value ? 'white' : 'var(--text-secondary)',
-                            transition: 'all 0.2s ease',
-                            whiteSpace: 'nowrap'
-                        }}
-                    >
-                        {group.label}
-                    </button>
-                ))}
-            </div>
+             {/* Status tabs */}
+             {/* Counts live on the tab they filter to, rather than in a
+                 separate row of tiles the eye has to correlate. */}
+             <Tabs
+               value={statusFilter}
+               onChange={setStatusFilter}
+               options={statusGroups.map((g) => ({
+                 value: g.value,
+                 label: g.label,
+                 count: statusCounts[g.value]
+               }))}
+             />
         </div>
       </div>
 
@@ -1757,54 +1718,13 @@ export default function Orders() {
           </table>
         </div>
         
-        {/* Pagination Controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 0' }}>
-            <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                Showing <span style={{ fontWeight: '600' }}>{((page - 1) * limit) + 1}</span> to <span style={{ fontWeight: '600' }}>{Math.min(page * limit, pagination.total)}</span> of <span style={{ fontWeight: '600' }}>{pagination.total}</span> results
-            </div>
-            <div style={{ display: 'flex', gap: '5px' }}>
-                <button 
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="btn btn-secondary btn-sm"
-                    style={{ opacity: page === 1 ? 0.5 : 1 }}
-                >
-                    Previous
-                </button>
-                
-                {/* Simple page numbers */}
-                {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                    // Show 5 pages around current page logic can be complex, let's keep it simple for now or implement better logic
-                    // If pages > 5, this simple map is insufficient.
-                    // Better to just show current page and prev/next for now to keep it clean, 
-                    // or standard [1] ... [current-1] [current] [current+1] ... [last]
-                    
-                    let p = page;
-                    if (pagination.pages <= 5) return i + 1;
-                    // Center around current page
-                    if (page <= 3) return i + 1;
-                    if (page >= pagination.pages - 2) return pagination.pages - 4 + i;
-                    return page - 2 + i;
-                }).map(p => (
-                    <button
-                        key={p}
-                        onClick={() => setPage(p)}
-                        className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-secondary'}`}
-                    >
-                        {p}
-                    </button>
-                ))}
-
-                <button 
-                    onClick={() => setPage(p => Math.min(pagination.pages, p + 1))}
-                    disabled={page === pagination.pages}
-                    className="btn btn-secondary btn-sm"
-                    style={{ opacity: page === pagination.pages ? 0.5 : 1 }}
-                >
-                    Next
-                </button>
-            </div>
-        </div>
+        <PageNav
+          page={page}
+          pages={pagination.pages}
+          total={pagination.total}
+          limit={limit}
+          onPage={setPage}
+        />
       </div>
 
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingOrder ? `Edit Order ${editingOrder.orderNumber}` : "Create New Order"}>

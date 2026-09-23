@@ -249,6 +249,134 @@ export function Pagination({ page, pages, total, onPage }) {
   );
 }
 
+/* -------------------------------------------------------------------- Tabs */
+
+/**
+ * Segmented filter control — status tabs and similar.
+ *
+ * Replaces pill buttons that filled with the brand colour when active, which
+ * put a saturated block at the top of the screen. The selected tab is marked
+ * by a raised white surface against a sunken track, the same language the
+ * sidebar's active item uses.
+ *
+ * options: [{ value, label, count }]
+ */
+export function Tabs({ value, onChange, options, className }) {
+  return (
+    <div
+      role="tablist"
+      /* w-fit so the control hugs its tabs, but min-w-0 + max-w-full so it can
+         shrink and scroll instead of forcing the whole page wider. A flex item
+         will not shrink below its content width without min-width: 0. */
+      className={cx(
+        'flex w-fit min-w-0 max-w-full gap-0.5 overflow-x-auto rounded-lg border border-border bg-surface-sunken p-0.5',
+        className
+      )}
+    >
+      {options.map((o) => {
+        const active = value === o.value;
+        return (
+          <button
+            key={o.value ?? 'all'}
+            role="tab"
+            aria-selected={active}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={cx(
+              'flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-base transition',
+              active
+                ? 'bg-surface font-medium text-content shadow-xs'
+                : 'text-content-secondary hover:text-content'
+            )}
+          >
+            {o.label}
+            {typeof o.count === 'number' ? (
+              <span
+                className={cx(
+                  'rounded px-1 text-xs tabular-nums',
+                  active ? 'bg-surface-hover text-content-secondary' : 'text-content-muted'
+                )}
+              >
+                {o.count}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- BulkActions */
+
+/**
+ * Appears only when rows are selected, so the toolbar is not permanently
+ * cluttered with actions that need a selection to mean anything.
+ */
+export function BulkActions({ count, onClear, children }) {
+  if (!count) return null;
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent-border bg-accent-subtle px-3 py-2">
+      <span className="text-base font-medium text-content">
+        {count} selected
+      </span>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-auto text-sm text-content-secondary underline-offset-2 hover:underline"
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
+/* --------------------------------------------------- PageNav (numbered) --- */
+
+/**
+ * Numbered pager with a result count, for screens where jumping pages matters.
+ * Windows around the current page instead of listing every page.
+ */
+export function PageNav({ page, pages, total, limit, onPage }) {
+  if (!pages || pages <= 1) return null;
+
+  const window = [];
+  const span = 5;
+  let start = Math.max(1, page - Math.floor(span / 2));
+  const end = Math.min(pages, start + span - 1);
+  start = Math.max(1, end - span + 1);
+  for (let p = start; p <= end; p++) window.push(p);
+
+  const from = (page - 1) * (limit || 0) + 1;
+  const to = Math.min(page * (limit || 0), total || 0);
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm text-content-secondary tabular-nums">
+        {total ? <>Showing {from}–{to} of {total}</> : null}
+      </p>
+      <div className="flex items-center gap-1">
+        <Button size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>Previous</Button>
+        {start > 1 ? <span className="px-1 text-sm text-content-muted">…</span> : null}
+        {window.map((p) => (
+          <Button
+            key={p}
+            size="sm"
+            variant={p === page ? 'primary' : 'secondary'}
+            onClick={() => onPage(p)}
+            className="min-w-[32px] !px-2"
+          >
+            {p}
+          </Button>
+        ))}
+        {end < pages ? <span className="px-1 text-sm text-content-muted">…</span> : null}
+        <Button size="sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next</Button>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------------------------------------------- DataTable */
 
 /**

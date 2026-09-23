@@ -130,12 +130,25 @@ code {
   content: none;
 }
 
+/* The sidebar is position:fixed, so it is out of flow and the content area has
+   to reserve its width itself. This carried `margin-left: <sidebar>` together
+   with `width: 100%`, which computes to viewport + sidebar — the page was
+   always ~240px too wide and only overflowed visibly once its content stopped
+   being able to shrink. min-width:0 lets inner flex/grid children scroll
+   instead of pushing the page wider. */
 .main-content {
   margin-left: var(--sidebar-width);
-  flex: 1;
-  padding: var(--sp-6) var(--sp-8);
+  width: calc(100% - var(--sidebar-width));
   max-width: var(--content-max);
-  width: 100%;
+  min-width: 0;
+  padding: var(--sp-6) var(--sp-8);
+}
+
+@media (max-width: 900px) {
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 @media (max-width: 900px) {

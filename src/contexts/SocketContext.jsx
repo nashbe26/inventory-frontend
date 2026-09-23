@@ -46,21 +46,16 @@ export function SocketProvider({ children }) {
       transports: ['websocket', 'polling']
     });
 
-    s.on('connect', () => {
-      if (user.role === 'admin' || user.role === 'manager') {
-        s.emit('joinRoom', 'admin_group');
-      }
-      if (user.role === 'supplier' && user.fournisseurId) {
-        s.emit('joinRoom', `supplier_${user.fournisseurId}`);
-      }
-      if (user.role === 'delivery_man') {
-        s.emit('joinRoom', 'delivery_group');
-      }
-      if (user.organization) {
-        const oid = user.organization._id || user.organization;
-        s.emit('joinRoom', `org_${oid}`);
-      }
-    });
+    /**
+     * Rooms are no longer requested from here.
+     *
+     * The client used to emit joinRoom for admin_group, delivery_group,
+     * org_<id> and supplier_<id>, and the server joined whatever it was asked
+     * for — so the room a client received events from was decided by the
+     * client. The server now assigns rooms on connection from the identity it
+     * verified in the handshake (AUDIT C-6). These emits were also redundant:
+     * every value above is derived from the same user the server already has.
+     */
 
     s.on('connect_error', (err) => {
       console.warn('Socket connect_error:', err.message);

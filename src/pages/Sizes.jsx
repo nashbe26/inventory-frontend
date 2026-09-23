@@ -1,178 +1,63 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import ReferenceDataPage from '../components/ReferenceDataPage';
 import { sizeService } from '../services';
-import { toast } from 'react-toastify';
-import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
-import Modal from '../components/Modal';
+import { Badge } from '../components/ui/Primitives';
 
 export default function Sizes() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSize, setEditingSize] = useState(null);
-  const [formData, setFormData] = useState({ label: '', value: '', sortOrder: 0 });
-  
-  const queryClient = useQueryClient();
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['sizes'],
-    queryFn: async () => {
-      const response = await sizeService.getAll();
-      return response.data.data;
-    }
+  /* Offer the scales that already exist, so a typo does not silently create a
+     new one. Free text is still allowed for genuinely new scales. */
+  const { data: scales } = useQuery({
+    queryKey: ['size-scales'],
+    queryFn: async () => (await sizeService.getScales()).data.data
   });
-
-  const createMutation = useMutation({
-    mutationFn: sizeService.create,
-    onSuccess: () => {
-      queryClient.invalidateQueries(['sizes']);
-      toast.success('Size created successfully');
-      closeModal();
-    },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || 'Failed to create size');
-    }
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => sizeService.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['sizes']);
-      toast.success('Size updated successfully');
-      closeModal();
-    },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || 'Failed to update size');
-    }
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: sizeService.delete,
-    onSuccess: () => {
-      queryClient.invalidateQueries(['sizes']);
-      toast.success('Size deleted successfully');
-    },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || 'Failed to delete size');
-    }
-  });
-
-  const openModal = (size = null) => {
-    if (size) {
-      setEditingSize(size);
-      setFormData({ label: size.label, value: size.value, sortOrder: size.sortOrder || 0 });
-    } else {
-      setEditingSize(null);
-      setFormData({ label: '', value: '', sortOrder: 0 });
-    }
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditingSize(null);
-    setFormData({ label: '', value: '', sortOrder: 0 });
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (editingSize) {
-      updateMutation.mutate({ id: editingSize._id, data: formData });
-    } else {
-      createMutation.mutate(formData);
-    }
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this size?')) {
-      deleteMutation.mutate(id);
-    }
-  };
-
-  if (isLoading) return <div className="loading">Loading sizes...</div>;
 
   return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Sizes</h1>
-        <button className="btn btn-primary" onClick={() => openModal()}>
-          <FaPlus /> Add Size
-        </button>
-      </div>
-
-      <div className="card">
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Label</th>
-                <th>Value</th>
-                <th>Sort Order</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.map((size) => (
-                <tr key={size._id}>
-                  <td>{size.label}</td>
-                  <td><strong>{size.value}</strong></td>
-                  <td>{size.sortOrder}</td>
-                  <td>
-                    <button 
-                      className="btn btn-sm btn-secondary" 
-                      onClick={() => openModal(size)}
-                      style={{ marginRight: '8px' }}
-                    >
-                      <FaEdit /> Edit
-                    </button>
-                    <button 
-                      className="btn btn-sm btn-danger" 
-                      onClick={() => handleDelete(size._id)}
-                    >
-                      <FaTrash /> Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <Modal isOpen={isModalOpen} onClose={closeModal} title={editingSize ? 'Edit Size' : 'Add Size'}>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Label *</label>
-            <input
-              type="text"
-              className="form-control"
-              value={formData.label}
-              onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>Value *</label>
-            <input
-              type="text"
-              className="form-control"
-              value={formData.value}
-              onChange={(e) => setFormData({ ...formData, value: e.target.value.toUpperCase() })}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>Sort Order</label>
-            <input
-              type="number"
-              className="form-control"
-              value={formData.sortOrder}
-              onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) })}
-            />
-          </div>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            {editingSize ? 'Update' : 'Create'} Size
-          </button>
-        </form>
-      </Modal>
-    </div>
+    <ReferenceDataPage
+      title="Sizes"
+      singular="Size"
+      description="Grouped into scales, so a garment offers apparel sizes and never shoe sizes."
+      service={sizeService}
+      queryKey="sizes"
+      searchKeys={['label', 'value', 'scale']}
+      emptyDescription="A style picks one scale, and its colourways generate a SKU per size in that scale."
+      fields={[
+        { key: 'label', label: 'Label', type: 'text', required: true, placeholder: 'M',
+          hint: 'What appears on the size grid and the label.' },
+        { key: 'value', label: 'Value', type: 'text', required: true, placeholder: 'M',
+          hint: 'Uppercased internal value; usually the same as the label.' },
+        {
+          key: 'scale',
+          label: 'Scale',
+          type: 'text',
+          required: true,
+          defaultValue: 'Général',
+          placeholder: 'Vêtements',
+          hint: (scales || []).length
+            ? `Existing scales: ${scales.map((s) => s.scale).join(', ')}`
+            : 'e.g. Vêtements, Chaussures EU, Taille unique'
+        },
+        {
+          key: 'order',
+          label: 'Sort order',
+          type: 'number',
+          defaultValue: 0,
+          min: 0,
+          /* The form previously wrote `sortOrder`, which is not a field on the
+             schema — so the value was silently discarded and sizes never
+             sorted. It writes `order` now. */
+          hint: 'Position within the scale. Leave gaps (10, 20, 30) so sizes can be inserted later.'
+        }
+      ]}
+      columns={[
+        { key: 'label', header: 'Label', render: (s) => (
+          <span className="font-medium text-content">{s.label}</span>
+        ) },
+        { key: 'scale', header: 'Scale', render: (s) => (
+          <Badge tone="neutral">{s.scale || 'Général'}</Badge>
+        ) },
+        { key: 'value', header: 'Value', mono: true, render: (s) => s.value || '—' },
+        { key: 'order', header: 'Order', align: 'right', render: (s) => s.order ?? 0 }
+      ]}
+    />
   );
 }

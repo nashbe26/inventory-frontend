@@ -227,6 +227,16 @@ export default function Layout() {
                           </NavLink>
                         </li>
                         <li>
+                          <NavLink to="/stock/count" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaClipboardList /> Stock count
+                          </NavLink>
+                        </li>
+                        <li>
+                          <NavLink to="/stock/movements" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaHistory /> Stock movements
+                          </NavLink>
+                        </li>
+                        <li>
                           <NavLink to="/styles" className={({ isActive }) => isActive ? 'active' : ''}>
                             <FaTshirt /> Styles
                           </NavLink>
@@ -406,6 +416,16 @@ export default function Layout() {
                   <li>
                     <NavLink to="/stock/receive" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaBoxOpen /> Receive stock
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink to="/stock/count" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaClipboardList /> Stock count
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink to="/stock/movements" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaHistory /> Stock movements
                     </NavLink>
                   </li>
                   <li>

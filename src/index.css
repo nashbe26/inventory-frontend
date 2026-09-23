@@ -2,46 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* Modern Color Palette */
-  --primary-color: #4f46e5; /* Indigo 600 */
-  --primary-dark: #4338ca; /* Indigo 700 */
-  --primary-light: #818cf8; /* Indigo 400 */
-  --secondary-color: #64748b; /* Slate 500 */
-  --success-color: #10b981; /* Emerald 500 */
-  --warning-color: #f59e0b; /* Amber 500 */
-  --danger-color: #ef4444; /* Red 500 */
-  --info-color: #3b82f6; /* Blue 500 */
-  --purple-color: #8b5cf6; /* Violet 500 */
-  
-  --bg-primary: #ffffff;
-  --bg-secondary: #f1f5f9; /* Slate 100 */
-  --bg-sidebar: #1e293b; /* Slate 800 */
-  
-  --text-primary: #0f172a; /* Slate 900 */
-  --text-secondary: #475569; /* Slate 600 */
-  --text-muted: #94a3b8; /* Slate 400 */
-  --text-on-dark: #f8fafc; /* Slate 50 */
-
-  --border-color: #e2e8f0; /* Slate 200 */
-  
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-}
+/* Palette, spacing, radii and shadows all live in styles/tokens.css, which is
+   imported before this file. The :root block that used to sit here redefined
+   the same names with the old values and, loading second, won — so the legacy
+   pages kept the old palette while new components used the new one. */
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
   -webkit-font-smoothing: antialiased;
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--c-bg);
+  color: var(--c-text);
   min-height: 100vh;
+}
+
+/* A visible, consistent focus ring. Several controls previously removed the
+   outline without replacing it, leaving keyboard users with no indication. */
+:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 code {
@@ -55,29 +36,32 @@ code {
   background-color: var(--bg-secondary);
 }
 
+/* A quieter sidebar: sunken rather than white, so the working surface is the
+   brightest thing on screen. */
 .sidebar {
-  width: 260px;
-  background: var(--bg-primary);
-  border-right: 1px solid var(--border-color);
-  padding: 1.5rem 1rem;
+  width: var(--sidebar-width);
+  background: var(--c-surface-sunken);
+  border-right: 1px solid var(--c-border);
+  padding: var(--sp-4) var(--sp-3);
   display: flex;
   flex-direction: column;
   position: fixed;
   height: 100vh;
   overflow-y: auto;
   z-index: 50;
-  transition: transform 0.3s ease;
+  transition: transform 0.25s var(--ease);
 }
 
 .sidebar-logo {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--primary-color);
-  margin-bottom: 2rem;
-  padding: 0 0.5rem;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--c-text);
+  margin-bottom: var(--sp-5);
+  padding: var(--sp-1) var(--sp-2);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--sp-2);
 }
 
 .sidebar-nav {
@@ -96,27 +80,45 @@ code {
 .sidebar-nav a {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  color: var(--text-secondary);
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2);
+  min-height: 32px;
+  color: var(--c-text-secondary);
   text-decoration: none;
   border-radius: var(--radius-md);
-  font-weight: 500;
-  font-size: 0.95rem;
-  transition: all 0.2s ease;
+  font-weight: 450;
+  font-size: var(--text-base);
+  line-height: 1.3;
+  transition: background-color var(--duration-fast) var(--ease),
+              color var(--duration-fast) var(--ease);
   position: relative;
-  overflow: hidden;
 }
 
 .sidebar-nav a:hover {
-  background-color: var(--bg-secondary);
-  color: var(--primary-color);
+  background-color: var(--c-surface-hover);
+  color: var(--c-text);
 }
 
+/* The active item is marked by contrast, not a saturated block. A solid
+   indigo bar was the loudest element on every screen. */
 .sidebar-nav a.active {
-  background-color: var(--primary-color);
-  color: white;
-  box-shadow: var(--shadow-md);
+  background-color: var(--c-surface);
+  color: var(--c-text);
+  font-weight: 550;
+  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--c-border);
+}
+
+.sidebar-nav a svg {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  opacity: 0.75;
+}
+
+.sidebar-nav a.active svg {
+  opacity: 1;
+  color: var(--c-accent);
 }
 
 /* Reset old pseudo-elements if they interfere */
@@ -125,11 +127,17 @@ code {
 }
 
 .main-content {
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
   flex: 1;
-  padding: 2rem;
-  max-width: 1600px;
+  padding: var(--sp-6) var(--sp-8);
+  max-width: var(--content-max);
   width: 100%;
+}
+
+@media (max-width: 900px) {
+  .main-content {
+    padding: var(--sp-4);
+  }
 }
 
 @keyframes fadeIn {
@@ -144,159 +152,223 @@ code {
 }
 
 /* Page Header */
+/* Page header — a title row, not a card.
+   It was a 130px white slab with a shadow, which pushed real content a third
+   of the way down the viewport before any data appeared. */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 35px;
-  padding: 25px 30px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-color);
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-6);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
-.page-header h1 {
-  font-size: 2rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* The gradient-clipped title read as decoration. A page title should be the
+   calmest thing on screen — hierarchy comes from size and weight, not colour. */
+.page-header h1,
+.page-title {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tighter);
+  color: var(--c-text);
+  background: none;
+  -webkit-text-fill-color: currentColor;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-2);
 }
 
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 600;
+/* Optional one-line description under a page title. */
+.page-subtitle {
+  margin-top: var(--sp-1);
+  font-size: var(--text-base);
+  color: var(--c-text-secondary);
+  font-weight: 400;
 }
 
-/* Cards */
+/* Cards — separated by a 1px border rather than a shadow. */
 .card {
-  background: white;
+  background: var(--c-surface);
   border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 1.5rem;
-  border: 1px solid var(--border-color);
-  transition: box-shadow 0.2s ease;
+  padding: var(--sp-5);
+  box-shadow: none;
+  margin-bottom: var(--sp-4);
+  border: 1px solid var(--c-border);
 }
 
-.card:hover {
-  box-shadow: var(--shadow-md);
+/* Only lift things that are actually clickable. A static panel that reacts to
+   the cursor is noise. */
+a.card:hover,
+button.card:hover,
+.card--interactive:hover {
+  border-color: var(--c-border-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .card h3 {
-  font-size: 1.125rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  margin-bottom: 1rem;
-  color: var(--text-primary);
+  letter-spacing: var(--tracking-tight);
+  margin-bottom: var(--sp-4);
+  color: var(--c-text);
 }
 
+/* A fixed 4-up grid that collapses cleanly, rather than auto-fit — which left
+   a half-empty second row whenever the tile count was not a multiple of the
+   column count. */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+}
+
+@media (max-width: 1180px) {
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .stats-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .stat-card {
-  background: white;
+  background: var(--c-surface);
   border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  padding: var(--sp-4);
+  box-shadow: none;
+  border: 1px solid var(--c-border);
   display: flex;
   flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
+/* Statistics are read, not clicked — no hover lift. */
 
 .stat-card h3 {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--c-text-secondary);
+  margin-bottom: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
 }
 
+/* Tabular figures so digits line up column to column, and tight tracking so
+   large numbers do not sprawl. */
 .stat-value {
-  font-size: 1.875rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 0.25rem;
-  line-height: 1.2;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--c-text);
+  margin-bottom: 0;
+  line-height: 1.15;
+  letter-spacing: var(--tracking-tighter);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-label {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-size: var(--text-sm);
+  color: var(--c-text-muted);
 }
 
 /* Buttons */
+/* 36px control height, shared by buttons, inputs and selects so anything
+   sitting in the same row lines up. The old mismatch between the search box
+   and the selects beside it came from each defining its own padding. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
+  gap: var(--sp-2);
+  height: 36px;
+  padding: 0 var(--sp-4);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  font-size: var(--text-base);
   font-weight: 500;
-  line-height: 1.25rem;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color var(--duration) var(--ease),
+              border-color var(--duration) var(--ease),
+              color var(--duration) var(--ease);
   user-select: none;
 }
 
-.btn:active {
-  transform: translateY(1px);
+.btn:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
 }
 
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary actions are near-black. Saturated brand colour on every button is
+   what made the old interface read as a template; the violet is reserved for
+   selection and focus. */
 .btn-primary {
-  background-color: var(--primary-color);
-  color: white;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  background-color: var(--c-action);
+  color: var(--c-text-inverse);
+  box-shadow: none;
 }
 
-.btn-primary:hover {
-  background-color: var(--primary-dark);
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--c-action-hover);
 }
 
 .btn-secondary {
-  background-color: white;
-  color: var(--text-secondary);
-  border-color: var(--border-color);
-  box-shadow: var(--shadow-sm);
+  background-color: var(--c-surface);
+  color: var(--c-text);
+  border-color: var(--c-border);
+  box-shadow: none;
 }
 
-.btn-secondary:hover {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--c-surface-hover);
+  border-color: var(--c-border-strong);
 }
 
+/* Destructive actions read as destructive on their own, without a pink slab. */
 .btn-danger {
-  background-color: #fee2e2;
-  color: var(--danger-color);
+  background-color: var(--c-surface);
+  color: var(--c-danger);
+  border-color: var(--c-danger-border);
 }
 
-.btn-danger:hover {
-  background-color: #fecaca;
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--c-danger-bg);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--c-text-secondary);
+  border-color: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background-color: var(--c-surface-hover);
+  color: var(--c-text);
 }
 
 .btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
+  height: 30px;
+  padding: 0 var(--sp-3);
+  font-size: var(--text-sm);
   border-radius: var(--radius-sm);
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
 }
 
 /* Tables */
@@ -318,22 +390,37 @@ thead {
   border-bottom: 1px solid var(--border-color);
 }
 
+/* Sentence case at readable contrast. Tiny uppercase grey headers look tidy
+   in a mockup and are hard to read in a warehouse. */
 th {
-  padding: 0.75rem 1.5rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  padding: var(--sp-2) var(--sp-4);
+  font-weight: 500;
+  color: var(--c-text-secondary);
+  font-size: var(--text-sm);
+  text-transform: none;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
 td {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: 0.875rem;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text);
+  font-size: var(--text-base);
   vertical-align: middle;
+}
+
+/* Quantities, prices and codes align on the decimal and read as data. */
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+td.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--c-text-secondary);
 }
 
 tbody tr:last-child td {
@@ -341,7 +428,7 @@ tbody tr:last-child td {
 }
 
 tbody tr:hover {
-  background-color: var(--bg-secondary);
+  background-color: var(--c-surface-sunken);
 }
 
 /* Forms */
@@ -357,35 +444,50 @@ tbody tr:hover {
   font-size: 0.875rem;
 }
 
+/* Same 36px height as .btn, so controls sharing a row align. */
 .form-control {
   width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid var(--border-color);
+  height: 36px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--c-border);
   border-radius: var(--radius-md);
-  font-size: 0.95rem;
-  transition: all 0.2s ease;
-  background: white;
-  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-family: inherit;
+  transition: border-color var(--duration) var(--ease),
+              box-shadow var(--duration) var(--ease);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.form-control::placeholder {
+  color: var(--c-text-muted);
 }
 
 .form-control:focus {
   outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px var(--primary-light); /* Softer focus ring */
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-subtle);
 }
 
-.form-control:hover {
-  border-color: var(--text-muted);
+.form-control:hover:not(:focus) {
+  border-color: var(--c-border-strong);
+}
+
+.form-control:disabled {
+  background: var(--c-surface-sunken);
+  color: var(--c-text-muted);
+  cursor: not-allowed;
 }
 
 select.form-control {
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%234f46e5' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
-  background-position: right 0.75rem center;
+  /* Neutral chevron — the indigo one drew the eye to every dropdown at once. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%238e8e9e' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right var(--sp-2) center;
   background-repeat: no-repeat;
-  background-size: 1.25rem;
-  padding-right: 2.5rem;
+  background-size: 1.125rem;
+  padding-right: var(--sp-8);
 }
 
 textarea.form-control {
@@ -394,30 +496,36 @@ textarea.form-control {
   font-family: inherit;
 }
 
-/* Search */
+/* Search
+   The margin-bottom and the 2px transparent border were why the search field
+   sat higher than, and measured taller than, the selects next to it. It now
+   inherits .form-control geometry exactly and only adds room for the icon. */
 .search-box {
   position: relative;
-  margin-bottom: 24px;
+  margin-bottom: 0;
+  min-width: 0;
 }
 
 .search-box input {
-  padding-left: 48px;
-  box-shadow: var(--shadow-md);
-  border: 2px solid transparent;
+  padding-left: var(--sp-8);
+  box-shadow: none;
+  border: 1px solid var(--c-border);
+  text-overflow: ellipsis;
 }
 
 .search-box input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1), var(--shadow-md);
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-subtle);
 }
 
 .search-icon {
   position: absolute;
-  left: 16px;
+  left: var(--sp-3);
   top: 50%;
   transform: translateY(-50%);
-  color: var(--primary-color);
-  font-size: 1.1rem;
+  color: var(--c-text-muted);
+  font-size: 0.875rem;
+  pointer-events: none;
   z-index: 1;
 }
 
@@ -486,50 +594,64 @@ textarea.form-control {
 }
 
 /* Badges */
+/* Status badges: a 1px border and a pale tint rather than a saturated fill,
+   so a table of twenty rows does not turn into a colour chart. Slightly
+   rounded rather than fully pill-shaped — pills read as marketing. */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.25rem 0.625rem;
-  border-radius: 9999px; /* Pill shape */
-  font-size: 0.75rem;
+  gap: var(--sp-1);
+  padding: 0.125rem var(--sp-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: var(--text-xs);
   font-weight: 500;
-  line-height: 1;
+  line-height: 1.5;
   white-space: nowrap;
 }
 
 .badge-success {
-  background-color: #d1fae5;
-  color: #065f46;
+  background-color: var(--c-success-bg);
+  border-color: var(--c-success-border);
+  color: var(--c-success);
 }
 
 .badge-warning {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--c-warning-bg);
+  border-color: var(--c-warning-border);
+  color: var(--c-warning);
 }
 
 .badge-danger {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background-color: var(--c-danger-bg);
+  border-color: var(--c-danger-border);
+  color: var(--c-danger);
 }
 
 .badge-info {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: var(--c-info-bg);
+  border-color: var(--c-info-border);
+  color: var(--c-info);
 }
 
 .badge-teal {
-  background-color: #ccfbf1;
-  color: #115e59;
+  background-color: var(--c-success-bg);
+  border-color: var(--c-success-border);
+  color: var(--c-success);
 }
 
-.badge-secondary {
-  background-color: #f3f4f6;
-  color: #374151;
+/* The default: most statuses are not good or bad, they are just states. */
+.badge-secondary,
+.badge-neutral {
+  background-color: var(--c-surface-sunken);
+  border-color: var(--c-border);
+  color: var(--c-text-secondary);
 }
 
 .badge-primary {
-  background-color: #e0e7ff;
-  color: #3730a3;
+  background-color: var(--c-accent-subtle);
+  border-color: var(--c-accent-border);
+  color: var(--c-accent-hover);
 }
 
 /* Loading */
@@ -768,27 +890,43 @@ textarea.form-control {
 }
 
 /* User Info Sidebar */
+/* The lavender gradient panel made the signed-in user the most prominent
+   thing in the sidebar. It is reference information, so it recedes. */
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  border-radius: 12px;
-  margin-bottom: 30px;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  background: transparent;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--sp-4);
 }
 
 .user-avatar {
-  width: 45px;
-  height: 45px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-weight: 700;
-  font-size: 1.25rem;
+  color: var(--c-text-secondary);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+/* Logo mark */
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--c-action);
+  color: var(--c-text-inverse);
   flex-shrink: 0;
 }
 
@@ -806,29 +944,23 @@ textarea.form-control {
   text-overflow: ellipsis;
 }
 
-.user-role {
+/* A role is reference information, not a status. Red for "admin" read as an
+   error; all roles now share one quiet treatment. */
+.user-role,
+.user-role.admin,
+.user-role.manager,
+.user-role.staff,
+.user-role.delivery_man,
+.user-role.supplier {
   display: inline-block;
-  padding: 3px 10px;
-  border-radius: 10px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.user-role.admin {
-  background: linear-gradient(135deg, #fecaca 0%, #fee2e2 100%);
-  color: #991b1b;
-}
-
-.user-role.manager {
-  background: linear-gradient(135deg, #bfdbfe 0%, #dbeafe 100%);
-  color: #1e40af;
-}
-
-.user-role.staff {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  color: #065f46;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: var(--text-xs);
+  font-weight: 450;
+  text-transform: capitalize;
+  letter-spacing: 0;
+  color: var(--c-text-muted);
 }
 
 /* Sidebar Footer */
@@ -954,29 +1086,41 @@ textarea.form-control {
   margin-bottom: 8px;
 }
 
+/* Section labels, not navigation targets — smaller and quieter than the links
+   beneath them. "Inventory Management" wrapped to two lines at the old size. */
 .menu-group-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 18px;
-  color: var(--text-secondary);
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  margin-top: var(--sp-3);
+  color: var(--c-text-muted);
   cursor: pointer;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  border-radius: var(--radius-md);
+  transition: color var(--duration-fast) var(--ease);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
   user-select: none;
 }
 
 .menu-group-header:hover {
-  background: rgba(0, 0, 0, 0.03);
-  color: var(--primary-color);
+  background: transparent;
+  color: var(--c-text-secondary);
 }
 
 .menu-group-header .group-label {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* An icon beside an uppercase section label is redundant at this size. */
+.menu-group-header .group-label svg {
+  display: none;
 }
 
 .menu-group-header .arrow {

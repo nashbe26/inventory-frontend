@@ -89,8 +89,16 @@ export default function Layout() {
         {isSidebarOpen ? <FaTimes /> : <FaBars />}
       </button>
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        {/* A drawn mark rather than an emoji: emoji render differently on every
+            OS and read as a placeholder. */}
         <div className="sidebar-logo">
-          📦 Inventory
+          <span className="logo-mark" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1.5 14 4.75v6.5L8 14.5 2 11.25v-6.5L8 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+              <path d="M2 4.75 8 8m0 0 6-3.25M8 8v6.5" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+            </svg>
+          </span>
+          Inventory
         </div>
         
         {user && (

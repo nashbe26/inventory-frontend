@@ -1,158 +1,135 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { inventoryService } from '../services';
-import { FaBoxes, FaExclamationTriangle, FaTimesCircle, FaDollarSign } from 'react-icons/fa';
+import { FaBoxes, FaLayerGroup, FaArrowRight } from 'react-icons/fa';
+import {
+  PageHeader,
+  StatTile,
+  Card,
+  Badge,
+  Button,
+  DataTable,
+  EmptyState,
+  Skeleton
+} from '../components/ui/Primitives';
+
+/** Tunisian dinar, the currency this business actually trades in. */
+const dt = (n) =>
+  `${Number(n || 0).toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DT`;
+
+const count = (n) => Number(n || 0).toLocaleString('fr-TN');
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
   const { data: stats, isLoading } = useQuery({
     queryKey: ['inventory-stats'],
-    queryFn: async () => {
-      const response = await inventoryService.getStats();
-      return response.data.data;
-    }
+    queryFn: async () => (await inventoryService.getStats()).data.data
   });
 
-  const { data: lowStockData } = useQuery({
+  const { data: lowStockData, isLoading: loadingStock } = useQuery({
     queryKey: ['low-stock'],
-    queryFn: async () => {
-      const response = await inventoryService.getLowStock();
-      return response.data.data;
-    }
+    queryFn: async () => (await inventoryService.getLowStock()).data.data
   });
 
-  if (isLoading) {
-    return <div className="loading">Loading dashboard...</div>;
-  }
+  const lowStock = lowStockData?.lowStock || [];
+  const outOfStock = lowStockData?.outOfStock || [];
+  const needsAttention = lowStock.length + outOfStock.length;
+
+  /* Gross margin is the number a brand actually runs on, and it was nowhere
+     on the old dashboard despite both inputs already being fetched. */
+  const retail = stats?.totalValue || 0;
+  const cost = stats?.totalBuyingValue || 0;
+  const marginPct = retail > 0 ? ((retail - cost) / retail) * 100 : null;
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">Dashboard</h1>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Stock position across the catalogue."
+      />
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Products</h3>
-          <div className="stat-value" style={{ color: 'var(--primary-color)' }}>
-            <FaBoxes style={{ display: 'inline', marginRight: '10px' }} />
-            {stats?.totalProducts || 0}
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Quantity</h3>
-          <div className="stat-value" style={{ color: 'var(--success-color)' }}>
-            {stats?.totalQuantity || 0}
-          </div>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
-            Units in stock
-          </p>
-        </div>
-
-        <div className="stat-card">
-          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Low Stock Alert</h3>
-          <div className="stat-value" style={{ color: 'var(--warning-color)' }}>
-            <FaExclamationTriangle style={{ display: 'inline', marginRight: '10px' }} />
-            {stats?.lowStockCount || 0}
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Out of Stock</h3>
-          <div className="stat-value" style={{ color: 'var(--danger-color)' }}>
-            <FaTimesCircle style={{ display: 'inline', marginRight: '10px' }} />
-            {stats?.outOfStockCount || 0}
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Value (Selling)</h3>
-          <div className="stat-value" style={{ color: 'var(--primary-color)' }}>
-            {stats?.totalValue?.toFixed(2) || '0.00'} dt
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <h3 style={{ fontSize: '0.875rem', fontWeight: '600' }}>Total Cost (Buying)</h3>
-          <div className="stat-value" style={{ color: 'var(--warning-color)' }}>
-            <FaDollarSign style={{ display: 'inline', marginRight: '10px' }} />
-            {stats?.totalBuyingValue?.toFixed(2) || '0.00'} dt
-          </div>
-        </div>
-      </div>
-
-      {lowStockData && (
-        <>
-          {lowStockData.lowStock?.length > 0 && (
-            <div className="card">
-              <h2 style={{ marginBottom: '20px', color: 'var(--warning-color)', fontSize: '1rem', fontWeight: '600' }}>
-                ⚠️ Low Stock Products
-              </h2>
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Name</th>
-                      <th>Category</th>
-                      <th>Quantity</th>
-                      <th>Threshold</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lowStockData.lowStock.map(product => (
-                      <tr key={product._id}>
-                        <td>{product.sku}</td>
-                        <td>{product.name}</td>
-                        <td>{product.categoryId?.name}</td>
-                        <td>
-                          <span className="badge badge-warning">
-                            {product.quantity}
-                          </span>
-                        </td>
-                        <td>{product.lowStockThreshold}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+      {isLoading ? (
+        <div className="stats-grid">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="stat-card">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-2 h-8 w-16" />
             </div>
-          )}
-
-          {lowStockData.outOfStock?.length > 0 && (
-            <div className="card">
-              <h2 style={{ marginBottom: '20px', color: 'var(--danger-color)', fontSize: '1rem', fontWeight: '600' }}>
-                ❌ Out of Stock Products
-              </h2>
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Name</th>
-                      <th>Category</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lowStockData.outOfStock.map(product => (
-                      <tr key={product._id}>
-                        <td>{product.sku}</td>
-                        <td>{product.name}</td>
-                        <td>{product.categoryId?.name}</td>
-                        <td>
-                          <span className="badge badge-danger">
-                            Out of Stock
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
+          ))}
+        </div>
+      ) : (
+        <div className="stats-grid">
+          <StatTile
+            label="Products"
+            value={count(stats?.totalProducts)}
+            hint={`${count(stats?.totalQuantity)} units in stock`}
+            icon={FaBoxes}
+          />
+          <StatTile
+            label="Stock value at retail"
+            value={dt(retail)}
+            hint={marginPct !== null ? `${marginPct.toFixed(1)}% gross margin` : 'No prices set'}
+          />
+          <StatTile
+            label="Stock value at cost"
+            value={dt(cost)}
+            hint="What the stock owes you"
+          />
+          {/* The only tile that carries colour, and only when it is non-zero —
+              so red on this screen always means the same thing. */}
+          <StatTile
+            label="Needs attention"
+            value={count(needsAttention)}
+            hint={
+              needsAttention === 0
+                ? 'Everything above threshold'
+                : `${outOfStock.length} out of stock · ${lowStock.length} low`
+            }
+            tone={outOfStock.length > 0 ? 'danger' : lowStock.length > 0 ? 'warning' : 'default'}
+          />
+        </div>
       )}
+
+      <Card
+        title="Needs restocking"
+        actions={
+          <Button size="sm" icon={FaArrowRight} onClick={() => navigate('/products')}>
+            All products
+          </Button>
+        }
+        padded={false}
+        className="p-0"
+      >
+        <div className="px-5 pb-5">
+          <DataTable
+            loading={loadingStock}
+            columns={[
+              { key: 'name', header: 'Product', render: (p) => (
+                <span className="font-medium text-content">{p.name}</span>
+              ) },
+              { key: 'sku', header: 'SKU', mono: true },
+              { key: 'category', header: 'Category', render: (p) => p.categoryId?.name || '—' },
+              { key: 'qty', header: 'On hand', align: 'right', render: (p) => (
+                <span className="font-variant-numeric">{count(p.totalQuantity ?? p.quantity)}</span>
+              ) },
+              { key: 'status', header: 'Status', render: (p) =>
+                (p.totalQuantity ?? p.quantity) === 0
+                  ? <Badge tone="danger">Out of stock</Badge>
+                  : <Badge tone="warning">Low stock</Badge>
+              }
+            ]}
+            rows={[...outOfStock, ...lowStock]}
+            empty={
+              <EmptyState
+                icon={FaLayerGroup}
+                title="Nothing needs restocking"
+                description="Every product is above its reorder threshold. Items will appear here as stock runs down."
+              />
+            }
+          />
+        </div>
+      </Card>
     </div>
   );
 }

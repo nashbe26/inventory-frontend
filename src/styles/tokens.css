@@ -1,0 +1,151 @@
+/**
+ * Design tokens — the single source of truth for the interface.
+ *
+ * Both layers read from here: tailwind.config.js maps its palette onto these
+ * variables, and the legacy semantic classes in index.css consume them
+ * directly. Previously the two were disconnected — Tailwind used its stock
+ * palette while index.css defined its own :root values — which is the
+ * structural reason the UI could not look consistent.
+ *
+ * Register: near-monochrome, 1px borders rather than shadows, colour reserved
+ * for state. A stock figure going red should be the only red on the screen.
+ */
+
+:root {
+  /* ---- Neutrals -------------------------------------------------------
+     A slightly cool grey ramp. Backgrounds sit near-white rather than the
+     heavy blue-grey the old palette used, so white cards read as raised
+     without needing a shadow. */
+  --c-bg: #fbfbfc;
+  --c-surface: #ffffff;
+  --c-surface-raised: #ffffff;
+  --c-surface-sunken: #f6f6f8;
+  --c-surface-hover: #f2f2f5;
+
+  --c-border: #e7e7ec;
+  --c-border-strong: #d4d4dc;
+  --c-border-focus: #8b8b9e;
+
+  --c-text: #17171c;
+  --c-text-secondary: #5c5c6b;
+  --c-text-muted: #8e8e9e;
+  --c-text-inverse: #ffffff;
+
+  /* ---- Accent ---------------------------------------------------------
+     Primary actions are near-black; the violet is for selection, links and
+     focus only. Restraint here is what separates a tool from a template. */
+  --c-accent: #5b5bd6;
+  --c-accent-hover: #4a4ac4;
+  --c-accent-subtle: #f0f0fd;
+  --c-accent-border: #d5d5f7;
+
+  --c-action: #17171c;
+  --c-action-hover: #2c2c34;
+
+  /* ---- State ----------------------------------------------------------
+     Deep, desaturated. Neon greens and reds are what made the old dashboard
+     read as decorative. Each has a subtle background for badges. */
+  --c-success: #1a7f5a;
+  --c-success-bg: #ecfdf3;
+  --c-success-border: #c4ecd8;
+
+  --c-warning: #a35c00;
+  --c-warning-bg: #fff8eb;
+  --c-warning-border: #f4dfae;
+
+  --c-danger: #b42318;
+  --c-danger-bg: #fef3f2;
+  --c-danger-border: #fbd1cd;
+
+  --c-info: #175cd3;
+  --c-info-bg: #eff4ff;
+  --c-info-border: #cddffc;
+
+  /* ---- Spacing: 4px base ---------------------------------------------- */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+  --sp-8: 2rem;
+  --sp-10: 2.5rem;
+  --sp-12: 3rem;
+
+  /* ---- Radius: tighter than before ------------------------------------ */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* ---- Elevation ------------------------------------------------------
+     Used sparingly, and only for things that genuinely float (menus,
+     modals). Flat surfaces are separated by a border instead. */
+  --shadow-xs: 0 1px 2px rgba(16, 16, 24, 0.04);
+  --shadow-sm: 0 1px 3px rgba(16, 16, 24, 0.06), 0 1px 2px rgba(16, 16, 24, 0.04);
+  --shadow-md: 0 4px 12px rgba(16, 16, 24, 0.08);
+  --shadow-lg: 0 12px 32px rgba(16, 16, 24, 0.12);
+  --shadow-xl: 0 24px 48px rgba(16, 16, 24, 0.16);
+
+  /* ---- Type ----------------------------------------------------------- */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  /* Headings get slightly negative tracking; small caps labels get positive. */
+  --tracking-tight: -0.011em;
+  --tracking-tighter: -0.02em;
+  --tracking-wide: 0.04em;
+
+  /* ---- Layout --------------------------------------------------------- */
+  --sidebar-width: 240px;
+  --topbar-height: 56px;
+  --content-max: 1440px;
+
+  /* ---- Motion ---------------------------------------------------------
+     Short and linear-ish; long eased transitions feel sluggish in a tool
+     someone uses all day. */
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --duration-fast: 100ms;
+  --duration: 150ms;
+}
+
+/* ---------------------------------------------------------------------
+   Legacy aliases.
+   36 pages and ~1000 lines of existing CSS reference these names. Mapping
+   them onto the new tokens retunes every one of those pages at once,
+   instead of leaving the old palette stranded next to the new one.
+   --------------------------------------------------------------------- */
+:root {
+  --primary-color: var(--c-accent);
+  --primary-dark: var(--c-accent-hover);
+  --primary-light: var(--c-accent-subtle);
+  --secondary-color: var(--c-text-secondary);
+  --success-color: var(--c-success);
+  --warning-color: var(--c-warning);
+  --danger-color: var(--c-danger);
+  --info-color: var(--c-info);
+  --purple-color: var(--c-accent);
+
+  --bg-primary: var(--c-surface);
+  --bg-secondary: var(--c-bg);
+  --bg-sidebar: var(--c-surface);
+
+  --text-primary: var(--c-text);
+  --text-secondary: var(--c-text-secondary);
+  --text-muted: var(--c-text-muted);
+  --text-on-dark: var(--c-text-inverse);
+
+  --border-color: var(--c-border);
+}

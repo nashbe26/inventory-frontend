@@ -15,6 +15,7 @@ import Products from './pages/Products'
 import Styles from './pages/Styles'
 import StyleForm from './pages/StyleForm'
 import StyleDetail from './pages/StyleDetail'
+import StockReceive from './pages/StockReceive'
 import ProductForm from './pages/ProductForm'
 import ProductDetails from './pages/ProductDetails'
 import ReturnScanner from './pages/ReturnScanner'
@@ -81,6 +82,7 @@ function App() {
           <Route path="rayons" element={<Rayons />} />
           <Route path="materials" element={<Materials />} />
           <Route path="fournisseurs" element={<Fournisseurs />} />
+          <Route path="stock/receive" element={<StockReceive />} />
           <Route path="styles" element={<Styles />} />
           <Route path="styles/new" element={<StyleForm />} />
           <Route path="styles/:id" element={<StyleDetail />} />

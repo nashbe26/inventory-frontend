@@ -35,6 +35,7 @@ import {
 function staffPathAllowed(pathname) {
   const prefixes = [
     '/styles',
+    '/stock',
     '/products',
     '/orders',
     '/order-analytics',
@@ -221,6 +222,11 @@ export default function Layout() {
                     {expandedGroups.inventory && (
                       <ul className="submenu">
                         <li>
+                          <NavLink to="/stock/receive" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaBoxOpen /> Receive stock
+                          </NavLink>
+                        </li>
+                        <li>
                           <NavLink to="/styles" className={({ isActive }) => isActive ? 'active' : ''}>
                             <FaTshirt /> Styles
                           </NavLink>
@@ -397,6 +403,11 @@ export default function Layout() {
               
               {expandedGroups.inventory && (
                 <ul className="submenu">
+                  <li>
+                    <NavLink to="/stock/receive" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaBoxOpen /> Receive stock
+                    </NavLink>
+                  </li>
                   <li>
                     <NavLink to="/styles" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaTshirt /> Styles

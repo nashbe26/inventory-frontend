@@ -3,207 +3,240 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { productService, categoryService, colorService, sizeService, rayonService } from '../services';
 import { toast } from 'react-toastify';
-import { FaPlus, FaEdit, FaTrash, FaSearch, FaEye } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaEye, FaBoxes, FaTshirt } from 'react-icons/fa';
+import {
+  PageHeader,
+  Button,
+  Toolbar,
+  SearchInput,
+  Select,
+  DataTable,
+  EmptyState,
+  StockBadge
+} from '../components/ui/Primitives';
 
 export default function Products() {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({
-    categoryId: '',
-    colorId: '',
-    sizeId: '',
-    rayonId: ''
-  });
-  const [page, setPage] = useState(1);
-
   const queryClient = useQueryClient();
 
-  // Fetch products
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({ categoryId: '', colorId: '', sizeId: '', rayonId: '' });
+  const [page, setPage] = useState(1);
+
+  const setFilter = (key) => (value) => {
+    setFilters((f) => ({ ...f, [key]: value }));
+    setPage(1);
+  };
+
   const { data: productsData, isLoading } = useQuery({
     queryKey: ['products', searchTerm, filters, page],
-    queryFn: async () => {
-      const response = await productService.getAll({
-        search: searchTerm,
-        ...filters,
-        page,
-        limit: 20
-      });
-      return response.data;
-    }
+    queryFn: async () =>
+      (await productService.getAll({ search: searchTerm, ...filters, page, limit: 20 })).data
   });
 
-  // Fetch dropdown data for filters
   const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: async () => (await categoryService.getAll()).data.data
   });
-
   const { data: colors } = useQuery({
     queryKey: ['colors'],
     queryFn: async () => (await colorService.getAll()).data.data
   });
-
   const { data: sizes } = useQuery({
     queryKey: ['sizes'],
     queryFn: async () => (await sizeService.getAll()).data.data
+  });
+  const { data: rayons } = useQuery({
+    queryKey: ['rayons'],
+    queryFn: async () => (await rayonService.getAll()).data.data
   });
 
   const deleteMutation = useMutation({
     mutationFn: productService.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
-      toast.success('Product deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success('Product deleted');
     },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || 'Failed to delete product');
-    }
+    onError: (error) =>
+      toast.error(error.response?.data?.message || 'Failed to delete product')
   });
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      deleteMutation.mutate(id);
+  const handleDelete = (product) => {
+    if (window.confirm(`Delete "${product.name}"? This cannot be undone.`)) {
+      deleteMutation.mutate(product._id);
     }
   };
 
-  const getStockBadge = (product) => {
-    const totalQty = product.totalQuantity || 0;
-    if (totalQty === 0) {
-      return <span className="badge badge-danger">Out of Stock</span>;
-    } else if (totalQty <= (product.lowStockThreshold || 10)) {
-      return <span className="badge badge-warning">Low Stock</span>;
-    } else {
-      return <span className="badge badge-success">In Stock</span>;
-    }
-  };
+  const products = productsData?.data || [];
+  const pagination = productsData?.pagination;
+  const isFiltered = Boolean(searchTerm || Object.values(filters).some(Boolean));
 
-  if (isLoading) return <div className="loading">Loading products...</div>;
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilters({ categoryId: '', colorId: '', sizeId: '', rayonId: '' });
+    setPage(1);
+  };
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">Products</h1>
-        <button className="btn btn-primary" onClick={() => navigate('/products/new')}>
-          <FaPlus /> Add Product
-        </button>
-      </div>
+      <PageHeader
+        title="Products"
+        description="The legacy catalogue. New textile work belongs under Styles, where stock is tracked per SKU through the movement ledger."
+      >
+        <Button variant="primary" icon={FaPlus} onClick={() => navigate('/products/new')}>
+          Add product
+        </Button>
+      </PageHeader>
 
-      {/* Search and Filters */}
-      <div className="card" style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-          <div className="search-box">
-            <FaSearch className="search-icon" />
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Search by name, SKU, or barcode..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+      <Toolbar>
+        <SearchInput
+          value={searchTerm}
+          onChange={(v) => { setSearchTerm(v); setPage(1); }}
+          placeholder="Search by name, SKU or barcode…"
+        />
+        <Select
+          value={filters.categoryId}
+          onChange={setFilter('categoryId')}
+          placeholder="Any category"
+          options={(categories || []).map((c) => ({ value: c._id, label: c.name }))}
+        />
+        <Select
+          value={filters.rayonId}
+          onChange={setFilter('rayonId')}
+          placeholder="Any rayon"
+          options={(rayons || []).map((r) => ({ value: r._id, label: r.name }))}
+        />
+        <Select
+          value={filters.colorId}
+          onChange={setFilter('colorId')}
+          placeholder="Any colour"
+          options={(colors || []).map((c) => ({ value: c._id, label: c.name }))}
+        />
+        <Select
+          value={filters.sizeId}
+          onChange={setFilter('sizeId')}
+          placeholder="Any size"
+          options={(sizes || []).map((s) => ({
+            value: s._id,
+            label: s.scale ? `${s.label} · ${s.scale}` : s.label
+          }))}
+        />
+        {isFiltered ? (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>Clear</Button>
+        ) : null}
+      </Toolbar>
+
+      <DataTable
+        loading={isLoading}
+        rows={products}
+        page={pagination?.page}
+        pages={pagination?.pages}
+        total={pagination?.total}
+        onPage={setPage}
+        columns={[
+          {
+            key: 'name',
+            header: 'Product',
+            render: (p) => (
+              <div className="min-w-0">
+                <div className="font-medium text-content truncate">{p.name}</div>
+                {p.sku ? (
+                  <div className="font-mono text-sm text-content-muted truncate">{p.sku}</div>
+                ) : null}
+              </div>
+            )
+          },
+          { key: 'category', header: 'Category', render: (p) => p.categoryId?.name || '—' },
+          { key: 'rayon', header: 'Rayon', render: (p) => p.rayonId?.name || '—' },
+          {
+            key: 'variants',
+            header: 'Variants',
+            align: 'right',
+            render: (p) => p.variants?.length || 0
+          },
+          {
+            key: 'qty',
+            header: 'On hand',
+            align: 'right',
+            render: (p) => (
+              <span className={p.totalQuantity === 0 ? 'text-content-muted' : 'font-medium'}>
+                {Number(p.totalQuantity || 0).toLocaleString('fr-TN')}
+              </span>
+            )
+          },
+          {
+            key: 'status',
+            header: 'Status',
+            render: (p) => (
+              <StockBadge quantity={p.totalQuantity} threshold={p.lowStockThreshold || 10} />
+            )
+          },
+          {
+            key: 'actions',
+            header: '',
+            width: '120px',
+            render: (p) => (
+              /* Row actions are quiet until hovered — a column of coloured
+                 buttons on every row competed with the data itself. */
+              <div className="flex justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="btn-icon"
+                  title="View"
+                  onClick={(e) => { e.stopPropagation(); navigate(`/products/${p._id}`); }}
+                >
+                  <FaEye />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="btn-icon"
+                  title="Edit"
+                  onClick={(e) => { e.stopPropagation(); navigate(`/products/edit/${p._id}`); }}
+                >
+                  <FaEdit />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="btn-icon text-danger"
+                  title="Delete"
+                  onClick={(e) => { e.stopPropagation(); handleDelete(p); }}
+                >
+                  <FaTrash />
+                </Button>
+              </div>
+            )
+          }
+        ]}
+        empty={
+          isFiltered ? (
+            <EmptyState
+              icon={FaBoxes}
+              title="No products match those filters"
+              description="Try widening the search, or clear the filters to see the whole catalogue."
+              action={<Button onClick={clearFilters}>Clear filters</Button>}
             />
-          </div>
-          <select
-            className="form-control"
-            value={filters.categoryId}
-            onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
-          >
-            <option value="">All Categories</option>
-            {categories?.map(cat => (
-              <option key={cat._id} value={cat._id}>{cat.name}</option>
-            ))}
-          </select>
-          <select
-            className="form-control"
-            value={filters.colorId}
-            onChange={(e) => setFilters({ ...filters, colorId: e.target.value })}
-          >
-            <option value="">All Colors (Any Variant)</option>
-            {colors?.map(color => (
-              <option key={color._id} value={color._id}>{color.name}</option>
-            ))}
-          </select>
-          <select
-            className="form-control"
-            value={filters.sizeId}
-            onChange={(e) => setFilters({ ...filters, sizeId: e.target.value })}
-          >
-            <option value="">All Sizes (Any Variant)</option>
-            {sizes?.map(size => (
-              <option key={size._id} value={size._id}>{size.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Products Table */}
-      <div className="card">
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Category</th>
-                <th>Rayon</th>
-                <th>Variants</th>
-                <th>Tot. Qty</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productsData?.data?.map((product) => (
-                <tr key={product._id}>
-                  <td><strong>{product.name}</strong></td>
-                  <td>{product.categoryId?.name}</td>
-                  <td>{product.rayonId?.name}</td>
-                  <td>{product.variants?.length || 0} variants</td>
-                  <td>{product.totalQuantity}</td>
-                  <td>{getStockBadge(product)}</td>
-                  <td>
-                    <button 
-                      className="btn btn-sm btn-primary" 
-                      onClick={() => navigate(`/products/${product._id}`)}
-                      style={{ marginRight: '5px' }}
-                    >
-                      <FaEye />
-                    </button>
-                    <button 
-                      className="btn btn-sm btn-secondary" 
-                      onClick={() => navigate(`/products/edit/${product._id}`)}
-                      style={{ marginRight: '5px' }}
-                    >
-                      <FaEdit />
-                    </button>
-                    <button 
-                      className="btn btn-sm btn-danger" 
-                      onClick={() => handleDelete(product._id)}
-                    >
-                      <FaTrash />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {productsData?.pagination && (
-          <div className="pagination">
-            <button 
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </button>
-            <span>Page {page} of {productsData.pagination.pages}</span>
-            <button 
-              onClick={() => setPage(p => p + 1)}
-              disabled={page >= productsData.pagination.pages}
-            >
-              Next
-            </button>
-          </div>
-        )}
-      </div>
+          ) : (
+            <EmptyState
+              icon={FaTshirt}
+              title="No products here"
+              description="This is the legacy catalogue. For textile work, create a Style instead — it generates a SKU per size with its own barcode, and tracks stock through the movement ledger."
+              action={
+                <div className="flex gap-2">
+                  <Button variant="primary" icon={FaTshirt} onClick={() => navigate('/styles')}>
+                    Go to Styles
+                  </Button>
+                  <Button icon={FaPlus} onClick={() => navigate('/products/new')}>
+                    Add a product anyway
+                  </Button>
+                </div>
+              }
+            />
+          )
+        }
+      />
     </div>
   );
 }

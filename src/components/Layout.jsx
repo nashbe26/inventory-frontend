@@ -3,7 +3,8 @@ import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { 
   FaHome, 
-  FaBoxes, 
+  FaBoxes,
+  FaTshirt, 
   FaTags, 
   FaPalette, 
   FaRuler, 
@@ -33,6 +34,7 @@ import {
 
 function staffPathAllowed(pathname) {
   const prefixes = [
+    '/styles',
     '/products',
     '/orders',
     '/order-analytics',
@@ -219,6 +221,11 @@ export default function Layout() {
                     {expandedGroups.inventory && (
                       <ul className="submenu">
                         <li>
+                          <NavLink to="/styles" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaTshirt /> Styles
+                          </NavLink>
+                        </li>
+                        <li>
                           <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''}>
                             <FaBoxes /> Products
                           </NavLink>
@@ -390,6 +397,11 @@ export default function Layout() {
               
               {expandedGroups.inventory && (
                 <ul className="submenu">
+                  <li>
+                    <NavLink to="/styles" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaTshirt /> Styles
+                    </NavLink>
+                  </li>
                   <li>
                     <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaBoxes /> Products

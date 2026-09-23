@@ -12,6 +12,9 @@ import Sizes from './pages/Sizes'
 import Rayons from './pages/Rayons'
 import Fournisseurs from './pages/Fournisseurs'
 import Products from './pages/Products'
+import Styles from './pages/Styles'
+import StyleForm from './pages/StyleForm'
+import StyleDetail from './pages/StyleDetail'
 import ProductForm from './pages/ProductForm'
 import ProductDetails from './pages/ProductDetails'
 import ReturnScanner from './pages/ReturnScanner'
@@ -78,6 +81,10 @@ function App() {
           <Route path="rayons" element={<Rayons />} />
           <Route path="materials" element={<Materials />} />
           <Route path="fournisseurs" element={<Fournisseurs />} />
+          <Route path="styles" element={<Styles />} />
+          <Route path="styles/new" element={<StyleForm />} />
+          <Route path="styles/:id" element={<StyleDetail />} />
+          <Route path="styles/:id/edit" element={<StyleForm />} />
           <Route path="products" element={<Products />} />
           <Route path="products/new" element={<ProductForm />} />
           <Route path="products/edit/:id" element={<ProductForm />} />

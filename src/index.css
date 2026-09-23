@@ -1,6 +1,10 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities;
+/* @tailwind utilities is injected at the END of this file.
+   Utilities have the same specificity as the semantic classes below
+   (.form-control, .btn, .card), so source order decides the winner. With
+   utilities first, `w-auto` on a select lost to `.form-control { width: 100% }`
+   and toolbar filters stacked vertically instead of sitting in a row. */
 
 /* Palette, spacing, radii and shadows all live in styles/tokens.css, which is
    imported before this file. The :root block that used to sit here redefined
@@ -1197,3 +1201,6 @@ textarea.form-control {
     display: none;
 }
 
+
+/* Utilities last: they must be able to override the semantic classes above. */
+@tailwind utilities;

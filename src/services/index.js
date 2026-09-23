@@ -68,3 +68,39 @@ export const inventoryService = {
   getLowStock: () => api.get('/inventory/low-stock'),
   getStats: () => api.get('/inventory/stats')
 };
+
+/**
+ * Textile catalogue: Style -> Colorway -> Sku.
+ * Stock never moves through these endpoints — it moves through stockService,
+ * which is the only writer to the ledger.
+ */
+export const styleService = {
+  getAll: (params) => api.get('/styles', { params }),
+  getOne: (id) => api.get(`/styles/${id}`),
+  create: (data) => api.post('/styles', data),
+  update: (id, data) => api.put(`/styles/${id}`, data),
+  delete: (id) => api.delete(`/styles/${id}`),
+
+  addColorway: (styleId, data) => api.post(`/styles/${styleId}/colorways`, data),
+  updateColorway: (styleId, colorwayId, data) =>
+    api.put(`/styles/${styleId}/colorways/${colorwayId}`, data),
+  deleteColorway: (styleId, colorwayId) =>
+    api.delete(`/styles/${styleId}/colorways/${colorwayId}`)
+};
+
+/** Every call here appends to the append-only stock movement ledger. */
+export const stockService = {
+  summary: () => api.get('/stock/summary'),
+  lowStock: () => api.get('/stock/low-stock'),
+  movements: (params) => api.get('/stock/movements', { params }),
+  skuMovements: (skuId, params) => api.get(`/stock/skus/${skuId}/movements`, { params }),
+  lookup: (identifier) => api.get(`/stock/lookup/${encodeURIComponent(identifier)}`),
+
+  receive: (data) => api.post('/stock/receive', data),
+  receiveBulk: (data) => api.post('/stock/receive-bulk', data),
+  pick: (data) => api.post('/stock/pick', data),
+  returnStock: (data) => api.post('/stock/return', data),
+  adjust: (data) => api.post('/stock/adjust', data),
+  count: (data) => api.post('/stock/count', data),
+  reconcile: (data) => api.post('/stock/reconcile', data)
+};

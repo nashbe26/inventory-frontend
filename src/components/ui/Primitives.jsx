@@ -249,6 +249,96 @@ export function Pagination({ page, pages, total, onPage }) {
   );
 }
 
+/* --------------------------------------------------------------- ScanField */
+
+/**
+ * The scan input for barcode-driven screens.
+ *
+ * Deliberately the largest control on the page: on a scanning screen the input
+ * IS the interface, and a picker glancing up from a carton needs to see at once
+ * that focus is still in the right place. Refocuses itself after every scan,
+ * because a hardware scanner types into whatever holds focus and a lost focus
+ * silently drops the next scan.
+ *
+ * `tone` colours the frame for the screen's purpose — returns add stock,
+ * dispatch removes it — so the operator can tell two similar-looking screens
+ * apart at a glance.
+ */
+export function ScanField({
+  value,
+  onChange,
+  onSubmit,
+  placeholder = 'Scan a barcode…',
+  hint,
+  disabled,
+  tone = 'accent',
+  inputRef,
+  action = 'Scan'
+}) {
+  const ring = {
+    accent: 'focus-within:border-accent focus-within:ring-accent-subtle',
+    success: 'focus-within:border-success focus-within:ring-success-border',
+    warning: 'focus-within:border-warning focus-within:ring-warning-border'
+  }[tone] || 'focus-within:border-accent focus-within:ring-accent-subtle';
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); onSubmit?.(); }}
+      className="w-full"
+    >
+      <div
+        className={cx(
+          'flex items-center gap-2 rounded-lg border border-border bg-surface px-3 transition focus-within:ring-4',
+          ring
+        )}
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0 text-content-muted" aria-hidden="true">
+          <path d="M3 4v12M6 4v12M9 4v12M13 4v12M17 4v12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <input
+          ref={inputRef}
+          className="h-14 flex-1 border-0 bg-transparent text-lg outline-none placeholder:text-content-muted"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          autoFocus
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <Button variant="primary" type="submit" disabled={disabled || !String(value).trim()}>
+          {action}
+        </Button>
+      </div>
+      {hint ? <p className="mt-2 text-sm text-content-muted">{hint}</p> : null}
+    </form>
+  );
+}
+
+/**
+ * Result of the last scan. Green for stock in, amber for stock out, red for a
+ * rejection — the operator reads the colour before the words.
+ */
+export function ScanResult({ tone = 'success', title, subtitle, detail, right }) {
+  const skin = {
+    success: 'border-success-border bg-success-bg',
+    warning: 'border-warning-border bg-warning-bg',
+    danger: 'border-danger-border bg-danger-bg',
+    neutral: 'border-border bg-surface-sunken'
+  }[tone] || 'border-border bg-surface-sunken';
+
+  return (
+    <div className={cx('mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3', skin)}>
+      <div className="min-w-0">
+        <p className="font-medium text-content">{title}</p>
+        {subtitle ? <p className="text-base text-content-secondary">{subtitle}</p> : null}
+        {detail ? <p className="font-mono text-sm text-content-muted">{detail}</p> : null}
+      </div>
+      {right ? <div className="text-right">{right}</div> : null}
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------- Tabs */
 
 /**

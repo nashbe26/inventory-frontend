@@ -1,6 +1,18 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:3009/api-inventory';
+/**
+ * AUDIT H-7. This was hardcoded to 'http://localhost:3009/api-inventory', so
+ * `npm run build` produced a bundle that called localhost from the VIEWER's
+ * machine — it could only ever work for someone running the API locally. The
+ * absolute URL also bypassed the Vite dev proxy, making that config dead.
+ *
+ * The relative default is the important part: served from the same origin as
+ * the API it just works, and in development Vite proxies /api-inventory to
+ * port 3009. VITE_API_URL overrides it when the API lives elsewhere.
+ *
+ * SocketContext already read VITE_API_URL; the two now agree.
+ */
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api-inventory';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

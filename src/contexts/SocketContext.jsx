@@ -5,12 +5,29 @@ import { useAuth } from './AuthContext';
 
 const SocketContext = createContext(null);
 
-/** Socket.io must use the API origin, not a path like /api-inventory. */
+/**
+ * Socket.io needs an ORIGIN, not a path like /api-inventory, so whatever
+ * VITE_API_URL holds is reduced to its origin.
+ *
+ * With VITE_API_URL unset the API is same-origin (see services/api.js), so the
+ * socket has to be too. Defaulting to localhost:3009 here — as this did —
+ * would have meant a same-origin deployment silently losing its websocket
+ * while every HTTP call kept working.
+ */
 function getSocketBaseUrl() {
-  const raw = import.meta.env.VITE_API_URL || 'http://localhost:3009';
+  const raw = import.meta.env.VITE_API_URL;
+
+  if (!raw) {
+    return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3009';
+  }
+
+  // A relative override ('/api-inventory') still means same-origin.
+  if (raw.startsWith('/')) {
+    return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3009';
+  }
+
   try {
-    const u = new URL(raw.includes('://') ? raw : `http://${raw}`);
-    return u.origin;
+    return new URL(raw.includes('://') ? raw : `http://${raw}`).origin;
   } catch {
     return String(raw).replace(/\/api-inventory\/?.*$/, '').replace(/\/$/, '') || 'http://localhost:3009';
   }

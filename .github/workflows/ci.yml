@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # There are no frontend tests yet, so the build is the only gate: it
+      # catches import errors, missing modules and syntax faults that the dev
+      # server tolerates. Leaving VITE_API_URL unset is deliberate — it is the
+      # same-origin default a deployment should ship with.
+      - run: npm run build

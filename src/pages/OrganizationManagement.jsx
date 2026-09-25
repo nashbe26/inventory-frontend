@@ -197,15 +197,35 @@ const OrganizationManagement = () => {
     }
   };
 
-  const canEditRole = (currentUserRole, targetUserRole) => {
-    if (currentUserRole === 'owner') return true;
-    if (currentUserRole === 'admin' && targetUserRole !== 'owner' && targetUserRole !== 'admin') return true;
-    return false;
+  /**
+   * Ownership is `organization.owner`, not a role string.
+   *
+   * `member.role` used to be able to say 'owner'; it is now a mirror of the
+   * user's real role, which has no such value (AUDIT H-5). Keying off it here
+   * would have offered "change role" and "remove" on the owner's own row —
+   * both of which the API refuses outright.
+   */
+  const ownerId = String(organization?.owner?._id ?? organization?.owner ?? '');
+  const isOwnerMember = (member) => String(member.user?._id ?? member.user ?? '') === ownerId;
+  const viewerIsOwner = ownerId && String(currentUser?._id ?? '') === ownerId;
+
+  const canEditRole = (member) => {
+    if (isOwnerMember(member)) return false;              // the API refuses this
+    if (member.user?._id === currentUser?._id) return false;
+    if (viewerIsOwner) return true;
+    return currentUser?.role === 'admin' && member.role !== 'admin';
   };
 
-  const availableRoles = (currentUserRole) => {
-    if (currentUserRole === 'owner') return ['admin', 'manager', 'staff', 'delivery_man'];
-    if (currentUserRole === 'admin') return ['manager', 'staff', 'delivery_man'];
+  // The owner still reads as 'Propriétaire'. That fact now comes from the
+  // owner field rather than from a role string that no longer exists.
+  const memberRoleLabel = (member) =>
+    isOwnerMember(member) ? getRoleLabel('owner') : getRoleLabel(member.role);
+  const memberRoleColor = (member) =>
+    isOwnerMember(member) ? getRoleBadgeColor('owner') : getRoleBadgeColor(member.role);
+
+  const availableRoles = () => {
+    if (viewerIsOwner) return ['admin', 'manager', 'staff', 'delivery_man'];
+    if (currentUser?.role === 'admin') return ['manager', 'staff', 'delivery_man'];
     return [];
   };
 
@@ -281,7 +301,7 @@ const OrganizationManagement = () => {
                             </span>
                         )}
                     </button>
-                    {['owner', 'admin'].includes(currentUser?.role) && (
+                    {(viewerIsOwner || currentUser?.role === 'admin') && (
                         <button
                             onClick={() => setActiveTab('settings')}
                             className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
@@ -329,21 +349,21 @@ const OrganizationManagement = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {canEditRole(currentUser?.role, member.role) && member.user?._id !== currentUser?._id ? (
+                                        {canEditRole(member) ? (
                                             <select
                                             value={member.role}
                                             onChange={(e) => handleRoleChange(member.user._id, e.target.value)}
                                             disabled={updateRoleMutation.isPending && updateRoleMutation.variables?.userId === member.user?._id}
                                             className={`text-xs border-gray-200 rounded-md focus:ring-blue-500 focus:border-blue-500 ${getRoleBadgeColor(member.role)}`}
                                             >
-                                            <option value={member.role} disabled>{getRoleLabel(member.role)}</option>
-                                            {availableRoles(currentUser?.role).filter(r => r !== member.role).map(role => (
+                                            <option value={member.role} disabled>{memberRoleLabel(member)}</option>
+                                            {availableRoles().filter(r => r !== member.role).map(role => (
                                                 <option key={role} value={role}>{getRoleLabel(role)}</option>
                                             ))}
                                             </select>
                                         ) : (
-                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadgeColor(member.role)}`}>
-                                            {getRoleLabel(member.role)}
+                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${memberRoleColor(member)}`}>
+                                            {memberRoleLabel(member)}
                                             </span>
                                         )}
                                     </td>
@@ -351,7 +371,7 @@ const OrganizationManagement = () => {
                                         {new Date(member.joinedAt).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        {member.role !== 'owner' && member.user?._id !== currentUser?._id && (
+                                        {!isOwnerMember(member) && member.user?._id !== currentUser?._id && (
                                             <button
                                             onClick={() => setConfirmRemove({ userId: member.user?._id, userName: member.user?.name })}
                                             className="text-gray-500 hover:text-red-600 p-2 rounded-full transition-colors"

@@ -7,6 +7,7 @@ import Modal from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { QRCodeCanvas } from 'qrcode.react';
 import { DELIVERY_FEE } from '../config/constants';
+import { downloadFile } from '../services';
 import {
   Toolbar,
   SearchInput,
@@ -826,9 +827,13 @@ export default function Orders() {
         setIsBordereauModalOpen(false);
         setSelectedOrderIds(new Set());
         toast.success(`Bordereau ${data.data.code} created!`);
-        // Trigger download
-        const token = localStorage.getItem('token');
-        window.open(`${api.defaults.baseURL}/bordereaux/${data.data._id}/pdf?token=${token}`, '_blank');
+        /* Fetched with the Authorization header rather than opened with
+           ?token=<jwt>, which put a 30-day credential into the URL and from
+           there into access logs and browser history (AUDIT H-3). */
+        downloadFile(
+          `/bordereaux/${data.data._id}/pdf`,
+          `bordereau-${data.data.code}.pdf`
+        ).catch(() => toast.error('Bordereau created, but the PDF could not be downloaded'));
         queryClient.invalidateQueries(['orders']);
     },
     onError: (error) => {

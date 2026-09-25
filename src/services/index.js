@@ -104,3 +104,30 @@ export const stockService = {
   count: (data) => api.post('/stock/count', data),
   reconcile: (data) => api.post('/stock/reconcile', data)
 };
+
+/**
+ * Fetch an authenticated file and hand it to the browser.
+ *
+ * The alternative — window.open(url + '?token=' + jwt) — puts a 30-day
+ * credential in the URL, where it lands in server access logs, browser
+ * history, and the Referer header of anything the page subsequently links to.
+ * That query-string fallback is why `protect` accepted ?token= at all
+ * (AUDIT H-3); fetching with the header and handing over a blob removes the
+ * need for it.
+ *
+ * @param {string} path   API path, e.g. `/bordereaux/${id}/pdf`
+ * @param {string} filename  suggested download name
+ */
+export async function downloadFile(path, filename) {
+  const response = await api.get(path, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoke on the next tick: revoking synchronously can cancel the download
+  // in some browsers before it has started reading the blob.
+  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+}

@@ -48,6 +48,18 @@ import { ToastContainer } from 'react-toastify'
 import { SocketProvider } from './contexts/SocketContext'
 import 'react-toastify/dist/ReactToastify.css'
 
+// Role sets, named after the server's, so a gate here can be checked against
+// the route file there. OFFICE mirrors the productEditors / handlers / editors
+// constants in productRoutes, stockRoutes and styleRoutes; MANAGEMENT mirrors
+// the admin+manager pairs on the shopify and organization routes; DELIVERY
+// mirrors internalDeliveryRoutes.
+//
+// These stop a user landing on a page that can only 403 at them. The server is
+// what actually enforces this (AUDIT H-6).
+const OFFICE = ['admin', 'manager', 'staff']
+const MANAGEMENT = ['admin', 'manager']
+const DELIVERY = ['admin', 'manager', 'delivery_man']
+
 function App() {
   return (
     <AuthProvider>
@@ -69,47 +81,47 @@ function App() {
             </PrivateRoute>
           }
         >
-          <Route index element={<Dashboard />} />
+          <Route index element={<PrivateRoute deny={['staff']}><Dashboard /></PrivateRoute>} />
           <Route path="profile" element={<Profile />} />
           <Route path="time-clock" element={<TimeClock />} />
           <Route path="scanner" element={<Navigate to="/prepare-scan" replace />} />
-          <Route path="scanner-return" element={<ReturnScanner />} />
-          <Route path="prepare-scan" element={<PrepareScan />} />
-          <Route path="dispatch-scan" element={<DispatchScan />} />
-          <Route path="history" element={<History />} />
+          <Route path="scanner-return" element={<PrivateRoute allow={OFFICE}><ReturnScanner /></PrivateRoute>} />
+          <Route path="prepare-scan" element={<PrivateRoute allow={OFFICE}><PrepareScan /></PrivateRoute>} />
+          <Route path="dispatch-scan" element={<PrivateRoute allow={OFFICE}><DispatchScan /></PrivateRoute>} />
+          <Route path="history" element={<PrivateRoute allow={OFFICE}><History /></PrivateRoute>} />
 
-          <Route path="categories" element={<Categories />} />
-          <Route path="colors" element={<Colors />} />
-          <Route path="sizes" element={<Sizes />} />
-          <Route path="rayons" element={<Rayons />} />
-          <Route path="materials" element={<Materials />} />
-          <Route path="fournisseurs" element={<Fournisseurs />} />
-          <Route path="stock/receive" element={<StockReceive />} />
-          <Route path="stock/count" element={<StockCount />} />
-          <Route path="stock/movements" element={<StockMovements />} />
-          <Route path="styles" element={<Styles />} />
-          <Route path="styles/new" element={<StyleForm />} />
-          <Route path="styles/:id" element={<StyleDetail />} />
-          <Route path="styles/:id/edit" element={<StyleForm />} />
-          <Route path="products" element={<Products />} />
-          <Route path="products/new" element={<ProductForm />} />
-          <Route path="products/edit/:id" element={<ProductForm />} />
-          <Route path="products/:id" element={<ProductDetails />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="order-analytics" element={<OrderAnalytics />} />
-          <Route path="pickups" element={<Pickups />} />
-          <Route path="organization" element={<OrganizationManagement />} />
-          <Route path="delivery-dashboard" element={<DeliveryDashboard />} />
-          <Route path="delivery-history" element={<DeliveryHistory />} />
-          <Route path="delivery-performance" element={<DeliveryPerformance />} />
-          <Route path="delivery-analytics" element={<DeliveryTeam />} />
-          <Route path="delivery-scan" element={<DeliveryScan />} />
-          <Route path="delivery-handover-scan" element={<DeliveryHandoverScan />} />
-          <Route path="claim-order/:id" element={<ClaimOrder />} />
-          <Route path="claim-bordereau/:code" element={<ClaimBordereau />} />
-          <Route path="delivery-team" element={<DeliveryTeam />} />
-          <Route path="bordereaux" element={<Bordereaux />} />
-          <Route path="shopify-settings" element={<ShopifySettings />} />
+          <Route path="categories" element={<PrivateRoute allow={OFFICE}><Categories /></PrivateRoute>} />
+          <Route path="colors" element={<PrivateRoute allow={OFFICE}><Colors /></PrivateRoute>} />
+          <Route path="sizes" element={<PrivateRoute allow={OFFICE}><Sizes /></PrivateRoute>} />
+          <Route path="rayons" element={<PrivateRoute allow={OFFICE}><Rayons /></PrivateRoute>} />
+          <Route path="materials" element={<PrivateRoute allow={OFFICE}><Materials /></PrivateRoute>} />
+          <Route path="fournisseurs" element={<PrivateRoute allow={OFFICE}><Fournisseurs /></PrivateRoute>} />
+          <Route path="stock/receive" element={<PrivateRoute allow={OFFICE}><StockReceive /></PrivateRoute>} />
+          <Route path="stock/count" element={<PrivateRoute allow={OFFICE}><StockCount /></PrivateRoute>} />
+          <Route path="stock/movements" element={<PrivateRoute allow={OFFICE}><StockMovements /></PrivateRoute>} />
+          <Route path="styles" element={<PrivateRoute allow={OFFICE}><Styles /></PrivateRoute>} />
+          <Route path="styles/new" element={<PrivateRoute allow={OFFICE}><StyleForm /></PrivateRoute>} />
+          <Route path="styles/:id" element={<PrivateRoute allow={OFFICE}><StyleDetail /></PrivateRoute>} />
+          <Route path="styles/:id/edit" element={<PrivateRoute allow={OFFICE}><StyleForm /></PrivateRoute>} />
+          <Route path="products" element={<PrivateRoute allow={OFFICE}><Products /></PrivateRoute>} />
+          <Route path="products/new" element={<PrivateRoute allow={OFFICE}><ProductForm /></PrivateRoute>} />
+          <Route path="products/edit/:id" element={<PrivateRoute allow={OFFICE}><ProductForm /></PrivateRoute>} />
+          <Route path="products/:id" element={<PrivateRoute allow={OFFICE}><ProductDetails /></PrivateRoute>} />
+          <Route path="orders" element={<PrivateRoute allow={OFFICE}><Orders /></PrivateRoute>} />
+          <Route path="order-analytics" element={<PrivateRoute allow={OFFICE}><OrderAnalytics /></PrivateRoute>} />
+          <Route path="pickups" element={<PrivateRoute allow={OFFICE}><Pickups /></PrivateRoute>} />
+          <Route path="organization" element={<PrivateRoute allow={MANAGEMENT}><OrganizationManagement /></PrivateRoute>} />
+          <Route path="delivery-dashboard" element={<PrivateRoute allow={DELIVERY}><DeliveryDashboard /></PrivateRoute>} />
+          <Route path="delivery-history" element={<PrivateRoute allow={DELIVERY}><DeliveryHistory /></PrivateRoute>} />
+          <Route path="delivery-performance" element={<PrivateRoute allow={DELIVERY}><DeliveryPerformance /></PrivateRoute>} />
+          <Route path="delivery-analytics" element={<PrivateRoute allow={MANAGEMENT}><DeliveryTeam /></PrivateRoute>} />
+          <Route path="delivery-scan" element={<PrivateRoute allow={DELIVERY}><DeliveryScan /></PrivateRoute>} />
+          <Route path="delivery-handover-scan" element={<PrivateRoute allow={DELIVERY}><DeliveryHandoverScan /></PrivateRoute>} />
+          <Route path="claim-order/:id" element={<PrivateRoute allow={DELIVERY}><ClaimOrder /></PrivateRoute>} />
+          <Route path="claim-bordereau/:code" element={<PrivateRoute allow={DELIVERY}><ClaimBordereau /></PrivateRoute>} />
+          <Route path="delivery-team" element={<PrivateRoute allow={MANAGEMENT}><DeliveryTeam /></PrivateRoute>} />
+          <Route path="bordereaux" element={<PrivateRoute allow={OFFICE}><Bordereaux /></PrivateRoute>} />
+          <Route path="shopify-settings" element={<PrivateRoute allow={MANAGEMENT}><ShopifySettings /></PrivateRoute>} />
           <Route path="chat" element={<TeamChat />} />
         </Route>
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { 
   FaHome, 
@@ -32,47 +32,21 @@ import {
   FaComments
 } from 'react-icons/fa'
 
-function staffPathAllowed(pathname) {
-  const prefixes = [
-    '/styles',
-    '/stock',
-    '/products',
-    '/orders',
-    '/order-analytics',
-    '/scanner-return',
-    '/prepare-scan',
-    '/dispatch-scan',
-    '/history',
-    '/pickups',
-    '/bordereaux',
-    '/categories',
-    '/colors',
-    '/sizes',
-    '/rayons',
-    '/materials',
-    '/fournisseurs',
-    '/profile',
-    '/chat',
-    '/time-clock'
-  ];
-  return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
+// Access used to be decided here, by matching the pathname against a list of
+// prefixes a staff user was allowed to see. That list had to be kept in step
+// with both App.jsx and the server's route files by hand, and the early return
+// it drove sat between two useState calls — so a staff user navigating to a
+// disallowed path rendered one hook where the previous render had four, which
+// is the "rendered fewer hooks than expected" crash.
+//
+// Both problems go away by gating the routes themselves: see App.jsx, where
+// every route now carries the role set its server counterpart enforces.
+// Layout is back to deciding what to *show*, not what to permit.
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const location = useLocation();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
-  if (user?.role === 'staff') {
-    const p = location.pathname;
-    if (p === '/') {
-      return <Navigate to="/prepare-scan" replace />;
-    }
-    if (!staffPathAllowed(p)) {
-      return <Navigate to="/prepare-scan" replace />;
-    }
-  }
-  
   const [expandedGroups, setExpandedGroups] = useState({
     operations: true,
     inventory: true,

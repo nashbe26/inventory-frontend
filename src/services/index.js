@@ -1,5 +1,12 @@
 import api from './api';
 
+/** Drop empty/undefined params so an unset filter isn't sent as "" (which the
+ *  server's query validation rejects). */
+const pruneEmpty = (params = {}) =>
+  Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+  );
+
 export const categoryService = {
   getAll: () => api.get('/categories'),
   getOne: (id) => api.get(`/categories/${id}`),
@@ -92,7 +99,7 @@ export const styleService = {
 export const stockService = {
   summary: () => api.get('/stock/summary'),
   lowStock: () => api.get('/stock/low-stock'),
-  movements: (params) => api.get('/stock/movements', { params }),
+  movements: (params) => api.get('/stock/movements', { params: pruneEmpty(params) }),
   skuMovements: (skuId, params) => api.get(`/stock/skus/${skuId}/movements`, { params }),
   lookup: (identifier) => api.get(`/stock/lookup/${encodeURIComponent(identifier)}`),
 

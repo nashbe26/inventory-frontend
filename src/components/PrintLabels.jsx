@@ -5,6 +5,15 @@ import { Button } from './ui/Primitives';
 
 const MAX_LABELS = 3000;
 
+/** Common thermal label sizes (width × height, mm). First is the default. */
+const LABEL_SIZES = [
+  { id: '65x40', label: '65 × 40 mm', w: 65, h: 40 },
+  { id: '58x40', label: '58 × 40 mm', w: 58, h: 40 },
+  { id: '50x30', label: '50 × 30 mm', w: 50, h: 30 },
+  { id: '40x30', label: '40 × 30 mm', w: 40, h: 30 },
+  { id: '100x50', label: '100 × 50 mm', w: 100, h: 50 }
+];
+
 const money = (v) =>
   v == null || v === ''
     ? null
@@ -27,7 +36,10 @@ const money = (v) =>
 export default function PrintLabels({ open, onClose, title, labels = [] }) {
   const [mode, setMode] = useState('stock');
   const [copies, setCopies] = useState(1);
+  const [sizeId, setSizeId] = useState('65x40');
   if (!open) return null;
+
+  const size = LABEL_SIZES.find((s) => s.id === sizeId) || LABEL_SIZES[0];
 
   const n = Math.min(Math.max(parseInt(copies, 10) || 1, 1), 200);
   const printable = labels.filter((l) => l.barcode);
@@ -60,9 +72,9 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
           .pl-label { box-shadow: 0 1px 6px rgba(0,0,0,.12); }
           .pl-empty { padding: 40px; text-align: center; color: #64748b; background:#fff; border-radius: 8px; }
         }
-        /* The ticket: 58×40mm, centred content, no border box around anything. */
+        /* The ticket: matches the chosen label, centred content, no border box. */
         .pl-label {
-          width: 58mm; height: 40mm; background: #fff; box-sizing: border-box;
+          width: ${size.w}mm; height: ${size.h}mm; background: #fff; box-sizing: border-box;
           padding: 2mm 3mm; display: flex; flex-direction: column; align-items: center;
           justify-content: center; gap: 0.5mm; text-align: center; overflow: hidden;
         }
@@ -72,21 +84,27 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
         .pl-label svg { max-width: 100%; height: auto; }
         .pl-empty { }
         @media print {
-          @page { size: 58mm 40mm; margin: 0; }
+          @page { size: ${size.w}mm ${size.h}mm; margin: 0; }
           html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
           #root { display: none !important; }
           .pl-overlay { position: static !important; background: none !important; display: block !important; }
           .pl-bar { display: none !important; }
           .pl-scroll { display: block !important; padding: 0 !important; gap: 0 !important; overflow: visible !important; }
           /* height:auto so a hair of overflow can't push a blank page; content
-             sits well under 40mm. One page per ticket. */
-          .pl-label { box-shadow: none !important; height: auto; min-height: 36mm; break-after: page; page-break-after: always; }
+             sits under the label height. One page per ticket. */
+          .pl-label { box-shadow: none !important; height: auto; min-height: ${size.h - 4}mm; break-after: page; page-break-after: always; }
           .pl-label:last-child { break-after: auto; page-break-after: auto; }
         }
       `}</style>
 
       <div className="pl-bar">
         <span className="pl-title">{title}</span>
+        <label>
+          Label
+          <select value={sizeId} onChange={(e) => setSizeId(e.target.value)}>
+            {LABEL_SIZES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </label>
         <label>
           Quantity
           <select value={mode} onChange={(e) => setMode(e.target.value)}>

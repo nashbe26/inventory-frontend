@@ -101,7 +101,9 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
           .pl-bar select { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
           .pl-warn { font-size: 13px; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 6px; }
           .pl-scroll { flex: 1; overflow: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-          .pl-label { box-shadow: 0 1px 6px rgba(0,0,0,.12); }
+          .pl-label { box-shadow: 0 1px 6px rgba(0,0,0,.12); position: relative; }
+          .pl-count { position: absolute; top: 4px; right: 6px; font-size: 9px; font-weight: 700; color: #0f172a; background: #e2e8f0; border-radius: 999px; padding: 1px 7px; }
+          .pl-hint { max-width: 420px; text-align: center; font-size: 13px; color: #e2e8f0; }
           .pl-empty { padding: 40px; text-align: center; color: #64748b; background:#fff; border-radius: 8px; }
         }
         /* The ticket: matches the chosen label, centred content, no border box. */
@@ -156,9 +158,6 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
         <Button variant="primary" onClick={downloadPdf} disabled={expanded.length === 0 || downloading}>
           {downloading ? 'Generating…' : `Download PDF (${expanded.length})`}
         </Button>
-        <Button onClick={() => window.print()} disabled={expanded.length === 0} title="Browser print — for a normal printer. For a label roll, use Download PDF.">
-          Print
-        </Button>
         <Button onClick={onClose}>Close</Button>
       </div>
 
@@ -170,16 +169,23 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
               : 'No barcodes to print.'}
           </div>
         ) : (
-          expanded.map((l, i) => (
-            <div className="pl-label" key={i}>
-              {l.name ? <div className="pl-name" title={l.name}>{l.name}</div> : null}
-              {(l.color || l.size) ? (
-                <div className="pl-meta">{[l.color, l.size].filter(Boolean).join(' · ')}</div>
-              ) : null}
-              <Barcode value={l.barcode} height={40} fontSize={12} />
-              {money(l.price) ? <div className="pl-price">{money(l.price)}</div> : null}
+          <>
+            <div className="pl-hint">
+              Preview — one of each SKU. The PDF prints {expanded.length} label{expanded.length === 1 ? '' : 's'},
+              one per page at {size.label}. Print the downloaded PDF at 100% (actual size).
             </div>
-          ))
+            {printable.filter((l) => countFor(l) > 0).map((l, i) => (
+              <div className="pl-label" key={i}>
+                {l.name ? <div className="pl-name" title={l.name}>{l.name}</div> : null}
+                {(l.color || l.size) ? (
+                  <div className="pl-meta">{[l.color, l.size].filter(Boolean).join(' · ')}</div>
+                ) : null}
+                <Barcode value={l.barcode} height={40} fontSize={12} />
+                {money(l.price) ? <div className="pl-price">{money(l.price)}</div> : null}
+                <div className="pl-count">× {countFor(l)}</div>
+              </div>
+            ))}
+          </>
         )}
       </div>
     </div>

@@ -1,22 +1,28 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import Barcode from './Barcode';
 import { Button } from './ui/Primitives';
 
 const MAX_LABELS = 3000;
 
+const money = (v) =>
+  v == null || v === ''
+    ? null
+    : `${Number(v).toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DT`;
+
 /**
- * A full-screen overlay that lays out barcode labels and prints them.
+ * A full-screen overlay that lays out barcode tickets and prints them, one
+ * ticket per page.
  *
- * Printing from an SPA reliably: on @media print we hide everything, then make
- * only .print-area visible and position it at the page origin, so the browser's
- * print (or "Save as PDF") produces just the label sheet — no app chrome. Each
- * label avoids breaking across a page.
+ * Rendered through a portal on <body>, so printing is simple and reliable: on
+ * @media print we hide #root (the whole app) and let the ticket list flow
+ * normally, one 58×40mm page per ticket (break-after: page). The old
+ * visibility-hidden + absolute-position trick paginated badly and emitted a
+ * blank page after every label.
  *
- * `labels` is [{ barcode, code, name, color, size, qty }]. Two modes:
- *  - "By stock quantity" (default): print one label per unit on hand, so each
- *    SKU prints as many labels as it has in stock — red/L and red/XL each get
- *    their own count and their own barcode.
- *  - "Fixed": a set number of copies of every SKU.
+ * Each ticket shows the name, colour · size, the EAN-13 barcode, and the price
+ * (plain text, no box). `labels` is [{ barcode, name, color, size, qty, price }],
+ * with two quantity modes: one per unit in stock (default), or a fixed number.
  */
 export default function PrintLabels({ open, onClose, title, labels = [] }) {
   const [mode, setMode] = useState('stock');
@@ -25,8 +31,7 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
 
   const n = Math.min(Math.max(parseInt(copies, 10) || 1, 1), 200);
   const printable = labels.filter((l) => l.barcode);
-  const countFor = (l) =>
-    mode === 'stock' ? Math.max(0, Math.floor(Number(l.qty) || 0)) : n;
+  const countFor = (l) => (mode === 'stock' ? Math.max(0, Math.floor(Number(l.qty) || 0)) : n);
 
   const requested = printable.reduce((sum, l) => sum + countFor(l), 0);
   const capped = requested > MAX_LABELS;
@@ -40,7 +45,7 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
     if (capped && remaining <= 0) break;
   }
 
-  return (
+  const overlay = (
     <div className="pl-overlay">
       <style>{`
         @media screen {
@@ -51,22 +56,32 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
           .pl-bar input { width: 64px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
           .pl-bar select { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
           .pl-warn { font-size: 13px; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 6px; }
-          .pl-scroll { flex: 1; overflow: auto; padding: 24px; display: flex; justify-content: center; }
-          .pl-area { background: #fff; padding: 12px; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
+          .pl-scroll { flex: 1; overflow: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+          .pl-label { box-shadow: 0 1px 6px rgba(0,0,0,.12); }
+          .pl-empty { padding: 40px; text-align: center; color: #64748b; background:#fff; border-radius: 8px; }
         }
-        .pl-grid { display: flex; flex-wrap: wrap; gap: 8px; width: 210mm; max-width: 100%; }
-        .pl-label { width: 48mm; border: 1px solid #e5e7eb; border-radius: 4px; padding: 6px 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-        .pl-label .pl-name { font-size: 11px; font-weight: 600; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pl-label .pl-meta { font-size: 10px; color: #64748b; }
-        .pl-empty { padding: 40px; text-align: center; color: #64748b; }
+        /* The ticket: 58×40mm, centred content, no border box around anything. */
+        .pl-label {
+          width: 58mm; height: 40mm; background: #fff; box-sizing: border-box;
+          padding: 2mm 3mm; display: flex; flex-direction: column; align-items: center;
+          justify-content: center; gap: 0.5mm; text-align: center; overflow: hidden;
+        }
+        .pl-label .pl-name { font-size: 9pt; font-weight: 700; line-height: 1.05; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pl-label .pl-meta { font-size: 7pt; color: #333; }
+        .pl-label .pl-price { font-size: 11pt; font-weight: 700; margin-top: 0.5mm; }
+        .pl-label svg { max-width: 100%; height: auto; }
+        .pl-empty { }
         @media print {
-          body * { visibility: hidden !important; }
-          .pl-area, .pl-area * { visibility: visible !important; }
-          .pl-area { position: absolute; inset: 0; box-shadow: none; padding: 0; }
-          .pl-bar, .pl-overlay > style { display: none !important; }
-          .pl-overlay { position: static; background: none; }
-          .pl-scroll { overflow: visible; padding: 0; }
-          .pl-label { page-break-inside: avoid; border-color: #cbd5e1; }
+          @page { size: 58mm 40mm; margin: 0; }
+          html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+          #root { display: none !important; }
+          .pl-overlay { position: static !important; background: none !important; display: block !important; }
+          .pl-bar { display: none !important; }
+          .pl-scroll { display: block !important; padding: 0 !important; gap: 0 !important; overflow: visible !important; }
+          /* height:auto so a hair of overflow can't push a blank page; content
+             sits well under 40mm. One page per ticket. */
+          .pl-label { box-shadow: none !important; height: auto; min-height: 36mm; break-after: page; page-break-after: always; }
+          .pl-label:last-child { break-after: auto; page-break-after: auto; }
         }
       `}</style>
 
@@ -86,9 +101,7 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
           </label>
         ) : null}
         {capped ? (
-          <span className="pl-warn" title={`${requested} labels requested`}>
-            capped at {MAX_LABELS}
-          </span>
+          <span className="pl-warn" title={`${requested} tickets requested`}>capped at {MAX_LABELS}</span>
         ) : null}
         <Button variant="primary" onClick={() => window.print()} disabled={expanded.length === 0}>
           Print ({expanded.length})
@@ -97,28 +110,27 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
       </div>
 
       <div className="pl-scroll">
-        <div className="pl-area">
-          {expanded.length === 0 ? (
-            <div className="pl-empty">
-              {mode === 'stock'
-                ? 'Nothing in stock to label. Switch to “Fixed number each”, or receive stock first.'
-                : 'No barcodes to print.'}
+        {expanded.length === 0 ? (
+          <div className="pl-empty">
+            {mode === 'stock'
+              ? 'Nothing in stock to label. Switch to “Fixed number each”, or receive stock first.'
+              : 'No barcodes to print.'}
+          </div>
+        ) : (
+          expanded.map((l, i) => (
+            <div className="pl-label" key={i}>
+              {l.name ? <div className="pl-name" title={l.name}>{l.name}</div> : null}
+              {(l.color || l.size) ? (
+                <div className="pl-meta">{[l.color, l.size].filter(Boolean).join(' · ')}</div>
+              ) : null}
+              <Barcode value={l.barcode} height={40} fontSize={12} />
+              {money(l.price) ? <div className="pl-price">{money(l.price)}</div> : null}
             </div>
-          ) : (
-            <div className="pl-grid">
-              {expanded.map((l, i) => (
-                <div className="pl-label" key={i}>
-                  {l.name ? <div className="pl-name" title={l.name}>{l.name}</div> : null}
-                  {(l.color || l.size) ? (
-                    <div className="pl-meta">{[l.color, l.size].filter(Boolean).join(' · ')}</div>
-                  ) : null}
-                  <Barcode value={l.barcode} height={40} fontSize={11} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          ))
+        )}
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }

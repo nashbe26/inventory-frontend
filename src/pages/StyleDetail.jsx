@@ -189,7 +189,8 @@ export default function StyleDetail() {
       name: style.name,
       color: cw.colorId?.name,
       size: sku.sizeId?.label,
-      qty: sku.quantityOnHand ?? 0
+      qty: sku.quantityOnHand ?? 0,
+      price: cw.retailPrice ?? style.retailPrice
     }))
   );
   const hasBarcodes = allLabels.some((l) => l.barcode);
@@ -292,7 +293,7 @@ export default function StyleDetail() {
                     <SkuCell
                       key={sku._id}
                       sku={sku}
-                      onClick={() => { setActiveSku({ ...sku, colorName: cw.colorId?.name }); setMoveQty(''); setMoveReason(''); }}
+                      onClick={() => { setActiveSku({ ...sku, colorName: cw.colorId?.name, price: cw.retailPrice ?? style.retailPrice }); setMoveQty(''); setMoveReason(''); }}
                     />
                   ))}
                 </div>
@@ -375,7 +376,7 @@ export default function StyleDetail() {
                   icon={FaPrint}
                   onClick={() => setPrintLabels({
                     title: `Barcode — ${activeSku.code}`,
-                    labels: [{ barcode: activeSku.barcode, name: style.name, color: activeSku.colorName, size: activeSku.sizeId?.label, qty: activeSku.quantityOnHand ?? 0 }]
+                    labels: [{ barcode: activeSku.barcode, name: style.name, color: activeSku.colorName, size: activeSku.sizeId?.label, qty: activeSku.quantityOnHand ?? 0, price: activeSku.price }]
                   })}
                 >
                   Print label

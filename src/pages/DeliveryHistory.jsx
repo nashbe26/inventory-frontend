@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { ORDER_STATUS, DELIVERED_STATUSES as DELIVERED } from '../config/orderStatus';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { DELIVERY_FEE } from '../config/constants';
 
-const DELIVERED = ['Livré', 'Livrée'];
+
 
 function getOrderEarning(status, deliveryFee) {
   return DELIVERED.includes(status) ? deliveryFee : 0;
@@ -39,12 +40,10 @@ function groupOrdersByDate(orders) {
 }
 
 const statusColors = {
-  Livré: 'bg-green-100 text-green-800',
-  Livrée: 'bg-green-100 text-green-800',
-  Annulé: 'bg-red-100 text-red-800',
-  Annulée: 'bg-red-100 text-red-800',
-  Retour: 'bg-orange-100 text-orange-800',
-  NRP: 'bg-yellow-100 text-yellow-800',
+  [ORDER_STATUS.DELIVERED]: 'bg-green-100 text-green-800',
+  [ORDER_STATUS.CANCELLED]: 'bg-red-100 text-red-800',
+  [ORDER_STATUS.RETURNED]: 'bg-orange-100 text-orange-800',
+  [ORDER_STATUS.NO_ANSWER]: 'bg-yellow-100 text-yellow-800',
 };
 
 export default function DeliveryHistory() {

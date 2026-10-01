@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { ORDER_STATUS, normaliseOrderStatus } from '../config/orderStatus';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FaPlus, FaSearch, FaEye, FaTrash, FaTimes, FaTruck, FaSync, FaBan, FaFileDownload, FaCheck, FaBoxOpen, FaShippingFast, FaQrcode, FaClipboardList, FaFileAlt, FaPrint, FaEdit, FaQuestionCircle, FaCopy, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -47,14 +48,11 @@ const statusGroups = [
   { label: 'NRP', value: 'NRP', color: 'bg-gray-300 text-gray-800' }
 ];
 
-/** Canonical labels: DB may still store feminine / lowercase variants. */
-const canonicalStatusLabel = (status) => {
-  if (!status) return '';
-  if (status === 'Confirmée' || status === 'confirmée' || status === 'confirmé') return 'Confirmé';
-  if (status === 'Livrée') return 'Livré';
-  if (status === 'Annulée') return 'Annulé';
-  return status;
-};
+/**
+ * One spelling per state since AUDIT M-2; this now just handles rows written
+ * before the migration.
+ */
+const canonicalStatusLabel = (status) => (status ? normaliseOrderStatus(status) : '');
 
 const getStatusBadge = (status) => {
     if (!status) return 'badge-secondary';
@@ -1505,7 +1503,7 @@ export default function Orders() {
                               const next = e.target.value;
                               const pending = isGovernorateIncompleteForConfirmation(order.customer?.gouvernerat);
                               const wantsConfirm =
-                                (next === 'Confirmé' || next === 'Confirmée') &&
+                                next === ORDER_STATUS.CONFIRMED &&
                                 !['confirmé', 'confirmée'].includes((order.status || '').toLowerCase());
                               if (wantsConfirm && pending) {
                                 toast.error('Renseignez un gouvernorat valide avant de confirmer (adresse non disponible).');
@@ -1614,10 +1612,8 @@ export default function Orders() {
                       {canOpsOrders && (
                           <>
                               {!order.deliveryBarcode &&
-                              (order.status === 'Préparé' ||
-                                order.status === 'Confirmé' ||
-                                order.status === 'Confirmée' ||
-                                order.status?.toLowerCase() === 'confirmé') ? (
+                              (order.status === ORDER_STATUS.PICKED ||
+                                order.status === ORDER_STATUS.CONFIRMED) ? (
                                   <button
                                     className="btn btn-sm btn-success"
                                     onClick={() => {
@@ -1640,7 +1636,7 @@ export default function Orders() {
                                     >
                                         <FaSync />
                                     </button>
-                                    {order.status !== 'Annulée' && order.status !== 'Annulé' && (
+                                    {order.status !== ORDER_STATUS.CANCELLED && (
                                         <button
                                             className="btn btn-sm btn-warning"
                                             onClick={() => {
@@ -1680,7 +1676,7 @@ export default function Orders() {
                           </>
                       )}
 
-                      {user.role === 'supplier' && (order.status === 'Confirmé' || order.status === 'Confirmée') && (
+                      {user.role === 'supplier' && order.status === ORDER_STATUS.CONFIRMED && (
                           <button
                             className="btn btn-sm btn-success"
                             onClick={() => updateStatusMutation.mutate({ id: order._id, status: 'Préparé' })}

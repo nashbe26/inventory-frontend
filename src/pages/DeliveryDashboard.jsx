@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DELIVERED_STATUSES as DELIVERED } from '../config/orderStatus';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -9,7 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { DELIVERY_FEE } from '../config/constants';
 
-const DELIVERED = ['Livré', 'Livrée'];
+
 
 function isToday(dateStr) {
   if (!dateStr) return false;

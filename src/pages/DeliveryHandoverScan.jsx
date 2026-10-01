@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { COMPLETED_STATUSES as COMPLETED } from '../config/orderStatus';
 import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -7,7 +8,7 @@ import {
   FaClock, FaTimes, FaBoxOpen, FaRedo
 } from 'react-icons/fa';
 
-const COMPLETED = ['Livré', 'Livrée', 'Annulé', 'Annulée', 'Retour', 'NRP'];
+
 
 const STATUS_STYLES = {
   NRP:    'bg-yellow-100 border-yellow-400 text-yellow-800',

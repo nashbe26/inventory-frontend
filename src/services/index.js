@@ -99,6 +99,7 @@ export const stockService = {
   receive: (data) => api.post('/stock/receive', data),
   receiveBulk: (data) => api.post('/stock/receive-bulk', data),
   pick: (data) => api.post('/stock/pick', data),
+  pickBulk: (data) => api.post('/stock/pick-bulk', data),
   returnStock: (data) => api.post('/stock/return', data),
   adjust: (data) => api.post('/stock/adjust', data),
   count: (data) => api.post('/stock/count', data),

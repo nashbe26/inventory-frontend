@@ -16,6 +16,7 @@ import Styles from './pages/Styles'
 import StyleForm from './pages/StyleForm'
 import StyleDetail from './pages/StyleDetail'
 import StockReceive from './pages/StockReceive'
+import StockOut from './pages/StockOut'
 import StockCount from './pages/StockCount'
 import StockMovements from './pages/StockMovements'
 import ProductForm from './pages/ProductForm'
@@ -97,6 +98,7 @@ function App() {
           <Route path="materials" element={<PrivateRoute allow={OFFICE}><Materials /></PrivateRoute>} />
           <Route path="fournisseurs" element={<PrivateRoute allow={OFFICE}><Fournisseurs /></PrivateRoute>} />
           <Route path="stock/receive" element={<PrivateRoute allow={OFFICE}><StockReceive /></PrivateRoute>} />
+          <Route path="stock/out" element={<PrivateRoute allow={OFFICE}><StockOut /></PrivateRoute>} />
           <Route path="stock/count" element={<PrivateRoute allow={OFFICE}><StockCount /></PrivateRoute>} />
           <Route path="stock/movements" element={<PrivateRoute allow={OFFICE}><StockMovements /></PrivateRoute>} />
           <Route path="styles" element={<PrivateRoute allow={OFFICE}><Styles /></PrivateRoute>} />

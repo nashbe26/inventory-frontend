@@ -167,7 +167,8 @@ export default function StyleDetail() {
       barcode: sku.barcode,
       name: style.name,
       color: cw.colorId?.name,
-      size: sku.sizeId?.label
+      size: sku.sizeId?.label,
+      qty: sku.quantityOnHand ?? 0
     }))
   );
   const hasBarcodes = allLabels.some((l) => l.barcode);
@@ -340,7 +341,7 @@ export default function StyleDetail() {
                   icon={FaPrint}
                   onClick={() => setPrintLabels({
                     title: `Barcode — ${activeSku.code}`,
-                    labels: [{ barcode: activeSku.barcode, name: style.name, color: activeSku.colorName, size: activeSku.sizeId?.label }]
+                    labels: [{ barcode: activeSku.barcode, name: style.name, color: activeSku.colorName, size: activeSku.sizeId?.label, qty: activeSku.quantityOnHand ?? 0 }]
                   })}
                 >
                   Print label

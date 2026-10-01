@@ -2,6 +2,8 @@ import { useState } from 'react';
 import Barcode from './Barcode';
 import { Button } from './ui/Primitives';
 
+const MAX_LABELS = 3000;
+
 /**
  * A full-screen overlay that lays out barcode labels and prints them.
  *
@@ -10,16 +12,33 @@ import { Button } from './ui/Primitives';
  * print (or "Save as PDF") produces just the label sheet — no app chrome. Each
  * label avoids breaking across a page.
  *
- * `labels` is [{ barcode, code, name, color, size }]. A copies control repeats
- * every label N times, for printing a run of the same SKU.
+ * `labels` is [{ barcode, code, name, color, size, qty }]. Two modes:
+ *  - "By stock quantity" (default): print one label per unit on hand, so each
+ *    SKU prints as many labels as it has in stock — red/L and red/XL each get
+ *    their own count and their own barcode.
+ *  - "Fixed": a set number of copies of every SKU.
  */
 export default function PrintLabels({ open, onClose, title, labels = [] }) {
+  const [mode, setMode] = useState('stock');
   const [copies, setCopies] = useState(1);
   if (!open) return null;
 
   const n = Math.min(Math.max(parseInt(copies, 10) || 1, 1), 200);
   const printable = labels.filter((l) => l.barcode);
-  const expanded = printable.flatMap((l) => Array.from({ length: n }, () => l));
+  const countFor = (l) =>
+    mode === 'stock' ? Math.max(0, Math.floor(Number(l.qty) || 0)) : n;
+
+  const requested = printable.reduce((sum, l) => sum + countFor(l), 0);
+  const capped = requested > MAX_LABELS;
+  let remaining = MAX_LABELS;
+  const expanded = [];
+  for (const l of printable) {
+    let c = countFor(l);
+    if (capped) c = Math.min(c, remaining);
+    for (let i = 0; i < c; i++) expanded.push(l);
+    remaining -= c;
+    if (capped && remaining <= 0) break;
+  }
 
   return (
     <div className="pl-overlay">
@@ -30,6 +49,8 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
           .pl-bar .pl-title { font-weight: 600; margin-right: auto; }
           .pl-bar label { font-size: 14px; color: #475569; display: flex; align-items: center; gap: 6px; }
           .pl-bar input { width: 64px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+          .pl-bar select { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+          .pl-warn { font-size: 13px; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 6px; }
           .pl-scroll { flex: 1; overflow: auto; padding: 24px; display: flex; justify-content: center; }
           .pl-area { background: #fff; padding: 12px; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
         }
@@ -52,9 +73,23 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
       <div className="pl-bar">
         <span className="pl-title">{title}</span>
         <label>
-          Copies each
-          <input type="number" min="1" max="200" value={copies} onChange={(e) => setCopies(e.target.value)} />
+          Quantity
+          <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="stock">One per unit in stock</option>
+            <option value="fixed">Fixed number each</option>
+          </select>
         </label>
+        {mode === 'fixed' ? (
+          <label>
+            Copies each
+            <input type="number" min="1" max="200" value={copies} onChange={(e) => setCopies(e.target.value)} />
+          </label>
+        ) : null}
+        {capped ? (
+          <span className="pl-warn" title={`${requested} labels requested`}>
+            capped at {MAX_LABELS}
+          </span>
+        ) : null}
         <Button variant="primary" onClick={() => window.print()} disabled={expanded.length === 0}>
           Print ({expanded.length})
         </Button>
@@ -64,7 +99,11 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
       <div className="pl-scroll">
         <div className="pl-area">
           {expanded.length === 0 ? (
-            <div className="pl-empty">No barcodes to print.</div>
+            <div className="pl-empty">
+              {mode === 'stock'
+                ? 'Nothing in stock to label. Switch to “Fixed number each”, or receive stock first.'
+                : 'No barcodes to print.'}
+            </div>
           ) : (
             <div className="pl-grid">
               {expanded.map((l, i) => (

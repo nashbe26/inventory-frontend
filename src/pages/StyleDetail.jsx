@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { styleService, colorService, stockService } from '../services';
-import { FaArrowLeft, FaPlus, FaPen, FaBoxOpen, FaHistory } from 'react-icons/fa';
+import { FaArrowLeft, FaPlus, FaPen, FaBoxOpen, FaHistory, FaBarcode, FaPrint } from 'react-icons/fa';
 import {
   PageHeader,
   Button,
@@ -13,6 +13,7 @@ import {
   Skeleton
 } from '../components/ui/Primitives';
 import Modal from '../components/Modal';
+import PrintLabels from '../components/PrintLabels';
 
 const dt = (n) =>
   n == null
@@ -82,6 +83,7 @@ export default function StyleDetail() {
   const [activeSku, setActiveSku] = useState(null);
   const [moveQty, setMoveQty] = useState('');
   const [moveReason, setMoveReason] = useState('');
+  const [printLabels, setPrintLabels] = useState(null); // { title, labels } or null
 
   const { data: style, isLoading } = useQuery({
     queryKey: ['style', id],
@@ -158,6 +160,17 @@ export default function StyleDetail() {
 
   const colorways = style.colorways || [];
   const totalUnits = colorways.reduce((sum, cw) => sum + (cw.totalStock || 0), 0);
+
+  /** Every SKU in the style, as printable label rows. */
+  const allLabels = colorways.flatMap((cw) =>
+    (cw.skus || []).map((sku) => ({
+      barcode: sku.barcode,
+      name: style.name,
+      color: cw.colorId?.name,
+      size: sku.sizeId?.label
+    }))
+  );
+  const hasBarcodes = allLabels.some((l) => l.barcode);
   const usedColorIds = new Set(colorways.map((cw) => String(cw.colorId?._id || cw.colorId)));
   const availableColors = (colors || []).filter((c) => !usedColorIds.has(String(c._id)));
 
@@ -202,6 +215,15 @@ export default function StyleDetail() {
         actions={
           <div className="flex items-center gap-4">
             {colorways.length > 0 ? <GridLegend /> : null}
+            {hasBarcodes ? (
+              <Button
+                size="sm"
+                icon={FaBarcode}
+                onClick={() => setPrintLabels({ title: `Barcodes — ${style.name}`, labels: allLabels })}
+              >
+                Print barcodes
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="primary"
@@ -312,6 +334,20 @@ export default function StyleDetail() {
               </div>
             </div>
 
+            {activeSku.barcode ? (
+              <div className="mb-4">
+                <Button
+                  icon={FaPrint}
+                  onClick={() => setPrintLabels({
+                    title: `Barcode — ${activeSku.code}`,
+                    labels: [{ barcode: activeSku.barcode, name: style.name, color: activeSku.colorName, size: activeSku.sizeId?.label }]
+                  })}
+                >
+                  Print label
+                </Button>
+              </div>
+            ) : null}
+
             <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
               <input
                 type="number"
@@ -371,6 +407,13 @@ export default function StyleDetail() {
           </>
         ) : null}
       </Modal>
+
+      <PrintLabels
+        open={Boolean(printLabels)}
+        onClose={() => setPrintLabels(null)}
+        title={printLabels?.title || 'Barcodes'}
+        labels={printLabels?.labels || []}
+      />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'react-toastify';
 import Barcode from './Barcode';
 import { Button } from './ui/Primitives';
+import { stockService } from '../services';
 
 const MAX_LABELS = 3000;
 
@@ -37,6 +39,7 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
   const [mode, setMode] = useState('stock');
   const [copies, setCopies] = useState(1);
   const [sizeId, setSizeId] = useState('65x40');
+  const [downloading, setDownloading] = useState(false);
   if (!open) return null;
 
   const size = LABEL_SIZES.find((s) => s.id === sizeId) || LABEL_SIZES[0];
@@ -56,6 +59,35 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
     remaining -= c;
     if (capped && remaining <= 0) break;
   }
+
+  // Download a server-rendered PDF (reliable for thermal label printers, where
+  // the browser's @page is overridden by the driver). Sends base rows + a count
+  // each, so the request stays small even for hundreds of labels.
+  const downloadPdf = async () => {
+    const rows = printable
+      .map((l) => ({
+        name: l.name, color: l.color, size: l.size, code: l.code,
+        barcode: l.barcode, price: l.price, count: countFor(l)
+      }))
+      .filter((r) => r.count > 0);
+    if (rows.length === 0) return;
+    setDownloading(true);
+    try {
+      const res = await stockService.dochettes({ labels: rows, widthMm: size.w, heightMm: size.h });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dochettes-${size.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Could not generate the PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const overlay = (
     <div className="pl-overlay">
@@ -121,8 +153,11 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
         {capped ? (
           <span className="pl-warn" title={`${requested} tickets requested`}>capped at {MAX_LABELS}</span>
         ) : null}
-        <Button variant="primary" onClick={() => window.print()} disabled={expanded.length === 0}>
-          Print ({expanded.length})
+        <Button variant="primary" onClick={downloadPdf} disabled={expanded.length === 0 || downloading}>
+          {downloading ? 'Generating…' : `Download PDF (${expanded.length})`}
+        </Button>
+        <Button onClick={() => window.print()} disabled={expanded.length === 0} title="Browser print — for a normal printer. For a label roll, use Download PDF.">
+          Print
         </Button>
         <Button onClick={onClose}>Close</Button>
       </div>

@@ -102,7 +102,9 @@ export const stockService = {
   returnStock: (data) => api.post('/stock/return', data),
   adjust: (data) => api.post('/stock/adjust', data),
   count: (data) => api.post('/stock/count', data),
-  reconcile: (data) => api.post('/stock/reconcile', data)
+  reconcile: (data) => api.post('/stock/reconcile', data),
+  /** Server-rendered dochette PDF (one label per page, sized to the roll). */
+  dochettes: (data) => api.post('/stock/dochettes', data, { responseType: 'blob' })
 };
 
 /**

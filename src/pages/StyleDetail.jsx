@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { styleService, colorService, stockService } from '../services';
+import { styleService, colorService, stockService, sizeService } from '../services';
 import { FaArrowLeft, FaPlus, FaPen, FaBoxOpen, FaHistory, FaBarcode, FaPrint } from 'react-icons/fa';
 import {
   PageHeader,
@@ -80,6 +80,7 @@ export default function StyleDetail() {
 
   const [addingColorway, setAddingColorway] = useState(false);
   const [newColorId, setNewColorId] = useState('');
+  const [newScale, setNewScale] = useState('');
   const [activeSku, setActiveSku] = useState(null);
   const [moveQty, setMoveQty] = useState('');
   const [moveReason, setMoveReason] = useState('');
@@ -95,6 +96,13 @@ export default function StyleDetail() {
     queryFn: async () => (await colorService.getAll()).data.data
   });
 
+  // All sizes, grouped by scale, so the colourway dialog can offer "letters"
+  // (XS–XL) vs "numbers" (35–46) with a sample of each.
+  const { data: allSizes } = useQuery({
+    queryKey: ['sizes'],
+    queryFn: async () => (await sizeService.getAll()).data.data
+  });
+
   const { data: movements } = useQuery({
     queryKey: ['sku-movements', activeSku?._id],
     queryFn: async () => (await stockService.skuMovements(activeSku._id, { limit: 8 })).data.data,
@@ -107,7 +115,7 @@ export default function StyleDetail() {
   };
 
   const addColorway = useMutation({
-    mutationFn: () => styleService.addColorway(id, { colorId: newColorId }),
+    mutationFn: () => styleService.addColorway(id, { colorId: newColorId, sizeScale: newScale || style.sizeScale }),
     onSuccess: (res) => {
       toast.success(res.data.message || 'Colourway added');
       setAddingColorway(false);
@@ -160,6 +168,19 @@ export default function StyleDetail() {
 
   const colorways = style.colorways || [];
   const totalUnits = colorways.reduce((sum, cw) => sum + (cw.totalStock || 0), 0);
+
+  // Size scales available in this org, each with a sample of its labels so the
+  // colourway dialog can show letters (XS, S, M…) vs numbers (35, 36…).
+  const sizesByScale = (allSizes || []).reduce((acc, s) => {
+    (acc[s.scale] = acc[s.scale] || []).push(s);
+    return acc;
+  }, {});
+  const scaleOptions = Object.entries(sizesByScale).map(([scale, sizes]) => ({
+    scale,
+    count: sizes.length,
+    sample: [...sizes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((s) => s.label).slice(0, 7).join(', ')
+  }));
+  const chosenScale = scaleOptions.find((s) => s.scale === newScale);
 
   /** Every SKU in the style, as printable label rows. */
   const allLabels = colorways.flatMap((cw) =>
@@ -229,7 +250,7 @@ export default function StyleDetail() {
               size="sm"
               variant="primary"
               icon={FaPlus}
-              onClick={() => setAddingColorway(true)}
+              onClick={() => { setNewScale(style.sizeScale); setAddingColorway(true); }}
               disabled={availableColors.length === 0}
             >
               Add colourway
@@ -243,7 +264,7 @@ export default function StyleDetail() {
             title="No colourways yet"
             description={`Adding one generates a SKU for every size in the "${style.sizeScale}" scale, each with its own barcode.`}
             action={
-              <Button variant="primary" icon={FaPlus} onClick={() => setAddingColorway(true)}>
+              <Button variant="primary" icon={FaPlus} onClick={() => { setNewScale(style.sizeScale); setAddingColorway(true); }}>
                 Add the first colourway
               </Button>
             }
@@ -288,9 +309,9 @@ export default function StyleDetail() {
         title="Add a colourway"
       >
         <p className="mb-4 text-base text-content-secondary">
-          A SKU will be created for every size in the <strong>{style.sizeScale}</strong> scale,
-          each with its own barcode.
+          A SKU is created for every size in the chosen scale, each with its own barcode.
         </p>
+
         <label className="mb-1.5 block text-base font-medium">Colour</label>
         <select className="form-control" value={newColorId} onChange={(e) => setNewColorId(e.target.value)}>
           <option value="">Select a colour</option>
@@ -302,11 +323,24 @@ export default function StyleDetail() {
           </p>
         ) : null}
 
+        <label className="mb-1.5 mt-4 block text-base font-medium">Sizes</label>
+        <select className="form-control" value={newScale} onChange={(e) => setNewScale(e.target.value)}>
+          <option value="">Select a size scale</option>
+          {scaleOptions.map((s) => (
+            <option key={s.scale} value={s.scale}>{s.scale} ({s.count})</option>
+          ))}
+        </select>
+        <p className="mt-2 text-sm text-content-muted">
+          {chosenScale
+            ? <>Will create <strong>{chosenScale.count}</strong> SKUs: {chosenScale.sample}{chosenScale.count > 7 ? '…' : ''}</>
+            : 'Pick letter sizes (XS, S, M…) or number sizes (35, 36…).'}
+        </p>
+
         <div className="mt-5 flex justify-end gap-2">
           <Button onClick={() => setAddingColorway(false)}>Cancel</Button>
           <Button
             variant="primary"
-            disabled={!newColorId || addColorway.isPending}
+            disabled={!newColorId || !newScale || addColorway.isPending}
             onClick={() => addColorway.mutate()}
           >
             {addColorway.isPending ? 'Creating…' : 'Create colourway'}

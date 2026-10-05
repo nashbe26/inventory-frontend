@@ -113,7 +113,10 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
           .pl-bar select { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
           .pl-warn { font-size: 13px; color: #b45309; background: #fef3c7; padding: 2px 8px; border-radius: 6px; }
           .pl-scroll { flex: 1; overflow: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-          .pl-label { box-shadow: 0 1px 6px rgba(0,0,0,.12); position: relative; }
+          /* flex-shrink:0 is essential — the scroll area is a flex column, and
+             without it many labels get shrunk below their height, collapsing the
+             barcode to an invisible strip. */
+          .pl-label { box-shadow: 0 1px 6px rgba(0,0,0,.12); position: relative; flex-shrink: 0; }
           .pl-count { position: absolute; top: 4px; right: 6px; font-size: 9px; font-weight: 700; color: #0f172a; background: #e2e8f0; border-radius: 999px; padding: 1px 7px; }
           .pl-qty { position: absolute; top: 4px; right: 6px; display: flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 700; color: #0f172a; background: #e2e8f0; border-radius: 6px; padding: 2px 6px; }
           .pl-qty input { width: 44px; padding: 1px 4px; border: 1px solid #94a3b8; border-radius: 4px; font-size: 12px; text-align: right; }

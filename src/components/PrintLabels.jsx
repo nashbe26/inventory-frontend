@@ -39,6 +39,7 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
   const [mode, setMode] = useState('stock');
   const [copies, setCopies] = useState(1);
   const [sizeId, setSizeId] = useState('65x40');
+  const [custom, setCustom] = useState({}); // barcode -> how many to print
   const [downloading, setDownloading] = useState(false);
   if (!open) return null;
 
@@ -46,7 +47,18 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
 
   const n = Math.min(Math.max(parseInt(copies, 10) || 1, 1), 200);
   const printable = labels.filter((l) => l.barcode);
-  const countFor = (l) => (mode === 'stock' ? Math.max(0, Math.floor(Number(l.qty) || 0)) : n);
+
+  const stockCount = (l) => Math.max(0, Math.floor(Number(l.qty) || 0));
+  // In "custom" mode each SKU defaults to its stock quantity (at least 1), and
+  // the user overrides per SKU below.
+  const defaultCustom = (l) => Math.max(1, stockCount(l));
+  const clampCount = (v) => Math.max(0, Math.min(2000, Math.floor(Number(v) || 0)));
+  const countFor = (l) => {
+    if (mode === 'stock') return stockCount(l);
+    if (mode === 'fixed') return n;
+    const v = custom[l.barcode];
+    return v === undefined || v === '' ? defaultCustom(l) : clampCount(v);
+  };
 
   const requested = printable.reduce((sum, l) => sum + countFor(l), 0);
   const capped = requested > MAX_LABELS;
@@ -103,6 +115,8 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
           .pl-scroll { flex: 1; overflow: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
           .pl-label { box-shadow: 0 1px 6px rgba(0,0,0,.12); position: relative; }
           .pl-count { position: absolute; top: 4px; right: 6px; font-size: 9px; font-weight: 700; color: #0f172a; background: #e2e8f0; border-radius: 999px; padding: 1px 7px; }
+          .pl-qty { position: absolute; top: 4px; right: 6px; display: flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 700; color: #0f172a; background: #e2e8f0; border-radius: 6px; padding: 2px 6px; }
+          .pl-qty input { width: 44px; padding: 1px 4px; border: 1px solid #94a3b8; border-radius: 4px; font-size: 12px; text-align: right; }
           .pl-hint { max-width: 420px; text-align: center; font-size: 13px; color: #e2e8f0; }
           .pl-empty { padding: 40px; text-align: center; color: #64748b; background:#fff; border-radius: 8px; }
         }
@@ -144,6 +158,7 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="stock">One per unit in stock</option>
             <option value="fixed">Fixed number each</option>
+            <option value="custom">Custom per product</option>
           </select>
         </label>
         {mode === 'fixed' ? (
@@ -171,10 +186,11 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
         ) : (
           <>
             <div className="pl-hint">
-              Preview — one of each SKU. The PDF prints {expanded.length} label{expanded.length === 1 ? '' : 's'},
-              one per page at {size.label}. Print the downloaded PDF at 100% (actual size).
+              {mode === 'custom'
+                ? `Set how many to print for each product below. The PDF prints ${expanded.length} label${expanded.length === 1 ? '' : 's'}, one per page at ${size.label}.`
+                : `Preview — one of each SKU. The PDF prints ${expanded.length} label${expanded.length === 1 ? '' : 's'}, one per page at ${size.label}. Print the downloaded PDF at 100% (actual size).`}
             </div>
-            {printable.filter((l) => countFor(l) > 0).map((l, i) => (
+            {(mode === 'custom' ? printable : printable.filter((l) => countFor(l) > 0)).map((l, i) => (
               <div className="pl-label" key={i}>
                 {l.name ? <div className="pl-name" title={l.name}>{l.name}</div> : null}
                 {(l.color || l.size) ? (
@@ -182,7 +198,20 @@ export default function PrintLabels({ open, onClose, title, labels = [] }) {
                 ) : null}
                 <Barcode value={l.barcode} height={40} fontSize={12} />
                 {money(l.price) ? <div className="pl-price">{money(l.price)}</div> : null}
-                <div className="pl-count">× {countFor(l)}</div>
+                {mode === 'custom' ? (
+                  <label className="pl-qty">
+                    Qty
+                    <input
+                      type="number"
+                      min="0"
+                      max="2000"
+                      value={custom[l.barcode] ?? defaultCustom(l)}
+                      onChange={(e) => setCustom((prev) => ({ ...prev, [l.barcode]: e.target.value }))}
+                    />
+                  </label>
+                ) : (
+                  <div className="pl-count">× {countFor(l)}</div>
+                )}
               </div>
             ))}
           </>

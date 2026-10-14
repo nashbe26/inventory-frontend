@@ -102,6 +102,11 @@ export const stockService = {
   movements: (params) => api.get('/stock/movements', { params: pruneEmpty(params) }),
   skuMovements: (skuId, params) => api.get(`/stock/skus/${skuId}/movements`, { params }),
   lookup: (identifier) => api.get(`/stock/lookup/${encodeURIComponent(identifier)}`),
+  /** Flat SKU list with style, colour, size, price and balance. */
+  catalog: (params) => api.get('/stock/skus', { params: pruneEmpty(params) }),
+  /** On hand / reserved (open orders) / available for these SKUs. */
+  availability: (skuIds, excludeOrder) =>
+    api.get('/stock/availability', { params: pruneEmpty({ skuIds: skuIds.join(','), excludeOrder }) }),
 
   receive: (data) => api.post('/stock/receive', data),
   receiveBulk: (data) => api.post('/stock/receive-bulk', data),
@@ -112,6 +117,8 @@ export const stockService = {
   adjust: (data) => api.post('/stock/adjust', data),
   count: (data) => api.post('/stock/count', data),
   reconcile: (data) => api.post('/stock/reconcile', data),
+  /** Recent deliveries (receipts regrouped by batch), for printing their labels. */
+  receiptBatches: (days = 30) => api.get('/stock/receipt-batches', { params: { days } }),
   /** Server-rendered dochette PDF (one label per page, sized to the roll). */
   dochettes: (data) => api.post('/stock/dochettes', data, { responseType: 'blob' })
 };

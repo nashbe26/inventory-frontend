@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { styleService, colorService, stockService, sizeService } from '../services';
-import { FaArrowLeft, FaPlus, FaPen, FaBoxOpen, FaHistory, FaBarcode, FaPrint } from 'react-icons/fa';
+import { FaArrowLeft, FaPlus, FaPen, FaBoxOpen, FaHistory, FaBarcode, FaPrint, FaTruckLoading } from 'react-icons/fa';
 import {
   PageHeader,
   Button,
@@ -13,7 +13,7 @@ import {
   Skeleton
 } from '../components/ui/Primitives';
 import Modal from '../components/Modal';
-import PrintLabels from '../components/PrintLabels';
+import ReceiveGrid from './styles/ReceiveGrid';
 
 const dt = (n) =>
   n == null
@@ -82,9 +82,10 @@ export default function StyleDetail() {
   const [newColorId, setNewColorId] = useState('');
   const [newScale, setNewScale] = useState('');
   const [activeSku, setActiveSku] = useState(null);
+  /** Receiving a delivery on the grid (quantities per colour and size, then labels). */
+  const [receiving, setReceiving] = useState(false);
   const [moveQty, setMoveQty] = useState('');
   const [moveReason, setMoveReason] = useState('');
-  const [printLabels, setPrintLabels] = useState(null); // { title, labels } or null
 
   const { data: style, isLoading } = useQuery({
     queryKey: ['style', id],
@@ -182,18 +183,7 @@ export default function StyleDetail() {
   }));
   const chosenScale = scaleOptions.find((s) => s.scale === newScale);
 
-  /** Every SKU in the style, as printable label rows. */
-  const allLabels = colorways.flatMap((cw) =>
-    (cw.skus || []).map((sku) => ({
-      barcode: sku.barcode,
-      name: style.name,
-      color: cw.colorId?.name,
-      size: sku.sizeId?.label,
-      qty: sku.quantityOnHand ?? 0,
-      price: cw.retailPrice ?? style.retailPrice
-    }))
-  );
-  const hasBarcodes = allLabels.some((l) => l.barcode);
+  const hasBarcodes = colorways.some((cw) => (cw.skus || []).some((sku) => sku.barcode));
   const usedColorIds = new Set(colorways.map((cw) => String(cw.colorId?._id || cw.colorId)));
   const availableColors = (colors || []).filter((c) => !usedColorIds.has(String(c._id)));
 
@@ -237,29 +227,44 @@ export default function StyleDetail() {
         title="Colourways"
         actions={
           <div className="flex items-center gap-4">
-            {colorways.length > 0 ? <GridLegend /> : null}
-            {hasBarcodes ? (
+            {colorways.length > 0 && !receiving ? <GridLegend /> : null}
+            {colorways.length > 0 && !receiving ? (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={FaTruckLoading}
+                onClick={() => setReceiving(true)}
+                title="Type the quantities that arrived for each colour and size, then print their labels"
+              >
+                Receive stock
+              </Button>
+            ) : null}
+            {hasBarcodes && !receiving ? (
               <Button
                 size="sm"
                 icon={FaBarcode}
-                onClick={() => setPrintLabels({ title: `Barcodes — ${style.name}`, labels: allLabels })}
+                onClick={() => navigate('/labels', { state: { addStyles: [id], message: `${style.name} is in the label basket` } })}
+                title="Open this style on the Print labels page, where you set how many each colour and size gets"
               >
                 Print barcodes
               </Button>
             ) : null}
-            <Button
-              size="sm"
-              variant="primary"
-              icon={FaPlus}
-              onClick={() => { setNewScale(style.sizeScale); setAddingColorway(true); }}
-              disabled={availableColors.length === 0}
-            >
-              Add colourway
-            </Button>
+            {!receiving ? (
+              <Button
+                size="sm"
+                icon={FaPlus}
+                onClick={() => { setNewScale(style.sizeScale); setAddingColorway(true); }}
+                disabled={availableColors.length === 0}
+              >
+                Add colourway
+              </Button>
+            ) : null}
           </div>
         }
       >
-        {colorways.length === 0 ? (
+        {receiving ? (
+          <ReceiveGrid style={style} onReceived={refresh} onCancel={() => setReceiving(false)} />
+        ) : colorways.length === 0 ? (
           <EmptyState
             icon={FaBoxOpen}
             title="No colourways yet"
@@ -374,9 +379,11 @@ export default function StyleDetail() {
               <div className="mb-4">
                 <Button
                   icon={FaPrint}
-                  onClick={() => setPrintLabels({
-                    title: `Barcode — ${activeSku.code}`,
-                    labels: [{ barcode: activeSku.barcode, name: style.name, color: activeSku.colorName, size: activeSku.sizeId?.label, qty: activeSku.quantityOnHand ?? 0, price: activeSku.price }]
+                  onClick={() => navigate('/labels', {
+                    state: {
+                      addSkus: [{ skuId: activeSku._id, styleId: id, count: 1 }],
+                      message: `1 label for ${activeSku.code} added — change the number on the grid`
+                    }
                   })}
                 >
                   Print label
@@ -444,12 +451,6 @@ export default function StyleDetail() {
         ) : null}
       </Modal>
 
-      <PrintLabels
-        open={Boolean(printLabels)}
-        onClose={() => setPrintLabels(null)}
-        title={printLabels?.title || 'Barcodes'}
-        labels={printLabels?.labels || []}
-      />
     </div>
   );
 }

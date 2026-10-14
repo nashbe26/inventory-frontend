@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { stockService, styleService } from '../services';
@@ -30,6 +31,9 @@ export default function StockReceive() {
   const [scan, setScan] = useState('');
   const [reference, setReference] = useState('');
   const [lines, setLines] = useState([]); // { sku, quantity, unitCost }
+  /** The delivery just received, so its labels are one click away. */
+  const [justReceived, setJustReceived] = useState(null);
+  const navigate = useNavigate();
   const [lookupError, setLookupError] = useState('');
 
   // Manual picker, for when a label is damaged or missing.
@@ -86,6 +90,15 @@ export default function StockReceive() {
       }),
     onSuccess: (res) => {
       toast.success(res.data.message || 'Delivery received');
+      setJustReceived({
+        label: reference || 'Delivery',
+        units: lines.reduce((s, l) => s + (Number(l.quantity) || 0), 0),
+        skus: lines.map((l) => ({
+          skuId: l.sku._id,
+          styleId: String(l.sku.styleId?._id ?? l.sku.styleId),
+          count: Number(l.quantity) || 0
+        }))
+      });
       setLines([]);
       setReference('');
       queryClient.invalidateQueries({ queryKey: ['styles'] });
@@ -121,6 +134,25 @@ export default function StockReceive() {
         title="Receive stock"
         description="Scan each item, or pick sizes by hand. Nothing is written until you confirm, and the whole delivery commits as one transaction."
       />
+
+      {justReceived ? (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-success-border bg-success-bg px-4 py-3">
+          <FaCheck className="text-success" aria-hidden="true" />
+          <span className="mr-auto">
+            « {justReceived.label} » received — {justReceived.units} unit(s). Label them now?
+          </span>
+          <Button
+            variant="primary"
+            icon={FaBarcode}
+            onClick={() => navigate('/labels', {
+              state: { addSkus: justReceived.skus, message: `${justReceived.units} label(s) from « ${justReceived.label} » added` }
+            })}
+          >
+            Print {justReceived.units} label(s)
+          </Button>
+          <button type="button" className="text-sm underline" onClick={() => setJustReceived(null)}>Dismiss</button>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
         <div>

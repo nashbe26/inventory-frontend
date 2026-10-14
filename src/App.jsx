@@ -13,6 +13,7 @@ import Rayons from './pages/Rayons'
 import Fournisseurs from './pages/Fournisseurs'
 import Products from './pages/Products'
 import Styles from './pages/Styles'
+import Labels from './pages/Labels'
 import StyleForm from './pages/StyleForm'
 import StyleDetail from './pages/StyleDetail'
 import StockReceive from './pages/StockReceive'
@@ -27,6 +28,7 @@ import PrepareScan from './pages/PrepareScan'
 import History from './pages/History'
 import BulkGeneration from './pages/BulkGeneration'
 import Orders from './pages/Orders'
+import OrderImport from './pages/OrderImport'
 import OrderAnalytics from './pages/OrderAnalytics'
 import Materials from './pages/Materials'
 import OrganizationSetup from './pages/OrganizationSetup'
@@ -102,6 +104,7 @@ function App() {
           <Route path="stock/count" element={<PrivateRoute allow={OFFICE}><StockCount /></PrivateRoute>} />
           <Route path="stock/movements" element={<PrivateRoute allow={OFFICE}><StockMovements /></PrivateRoute>} />
           <Route path="styles" element={<PrivateRoute allow={OFFICE}><Styles /></PrivateRoute>} />
+          <Route path="labels" element={<PrivateRoute allow={OFFICE}><Labels /></PrivateRoute>} />
           <Route path="styles/new" element={<PrivateRoute allow={OFFICE}><StyleForm /></PrivateRoute>} />
           <Route path="styles/:id" element={<PrivateRoute allow={OFFICE}><StyleDetail /></PrivateRoute>} />
           <Route path="styles/:id/edit" element={<PrivateRoute allow={OFFICE}><StyleForm /></PrivateRoute>} />
@@ -110,6 +113,7 @@ function App() {
           <Route path="products/edit/:id" element={<PrivateRoute allow={OFFICE}><ProductForm /></PrivateRoute>} />
           <Route path="products/:id" element={<PrivateRoute allow={OFFICE}><ProductDetails /></PrivateRoute>} />
           <Route path="orders" element={<PrivateRoute allow={OFFICE}><Orders /></PrivateRoute>} />
+          <Route path="orders/import" element={<PrivateRoute allow={OFFICE}><OrderImport /></PrivateRoute>} />
           <Route path="order-analytics" element={<PrivateRoute allow={OFFICE}><OrderAnalytics /></PrivateRoute>} />
           <Route path="pickups" element={<PrivateRoute allow={OFFICE}><Pickups /></PrivateRoute>} />
           <Route path="organization" element={<PrivateRoute allow={MANAGEMENT}><OrganizationManagement /></PrivateRoute>} />

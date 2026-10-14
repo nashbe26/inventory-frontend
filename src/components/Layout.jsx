@@ -221,6 +221,11 @@ export default function Layout() {
                           </NavLink>
                         </li>
                         <li>
+                          <NavLink to="/labels" className={({ isActive }) => isActive ? 'active' : ''}>
+                            <FaBarcode /> Print labels
+                          </NavLink>
+                        </li>
+                        <li>
                           <NavLink to="/products" className={({ isActive }) => isActive ? 'active' : ''}>
                             <FaBoxes /> Products
                           </NavLink>
@@ -415,6 +420,11 @@ export default function Layout() {
                   <li>
                     <NavLink to="/styles" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaTshirt /> Styles
+                    </NavLink>
+                  </li>
+                  <li>
+                    <NavLink to="/labels" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaBarcode /> Print labels
                     </NavLink>
                   </li>
                   <li>

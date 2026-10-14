@@ -17,6 +17,7 @@ const ShopifySettings = () => {
     shopDomain: '',
     webhookSecret: '',
     enabled: false,
+    ordersEnabled: true,
     webhookUrl: '',
     oauthCallbackUrl: '',
     oauthPublicOrigin: '',
@@ -161,6 +162,7 @@ const ShopifySettings = () => {
       const payload = {
         shopDomain: settings.shopDomain,
         enabled: settings.enabled,
+        ordersEnabled: settings.ordersEnabled !== false,
         clientId: settings.clientId || undefined
       };
       if (secretInput) payload.webhookSecret = secretInput;
@@ -251,6 +253,14 @@ const ShopifySettings = () => {
       const importRes = await api.post('/webhooks/shopify/import-products', importPayload);
       setImportResults(importRes.data.data);
       toast.success(importRes.data.message || 'Products imported');
+
+      if (settings.ordersEnabled === false) {
+        const ir = importRes.data?.data || {};
+        toast.info(
+          `Products synced (${ir.created ?? 0} created · ${ir.updated ?? 0} refreshed). Orders skipped — order intake is paused.`
+        );
+        return;
+      }
 
       toast.info('Step 2/2: Resyncing all Shopify orders…');
       const agg = await syncShopifyOrdersAllBatches({
@@ -400,6 +410,33 @@ const ShopifySettings = () => {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Order intake — pausable on its own, products keep syncing */}
+      <div className={`rounded-xl border p-6 ${settings.ordersEnabled === false ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'}`}>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">Import orders from Shopify</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              {settings.ordersEnabled === false
+                ? 'Paused. Shopify orders are acknowledged but not imported, and will not be fetched later when you turn this back on. Enter orders by hand on the Orders page.'
+                : 'New Shopify orders arrive in Orders as « En Attente ». Turn off to pause order intake; product sync is unaffected.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label={settings.ordersEnabled === false ? 'Resume Shopify order intake' : 'Pause Shopify order intake'}
+            onClick={() => setSettings((prev) => ({ ...prev, ordersEnabled: prev.ordersEnabled === false }))}
+            className="text-3xl focus:outline-none flex-shrink-0"
+          >
+            {settings.ordersEnabled === false ? (
+              <FaToggleOff className="text-gray-400" />
+            ) : (
+              <FaToggleOn className="text-green-500" />
+            )}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">Takes effect when you press Save.</p>
       </div>
 
       {/* Configuration */}
@@ -833,7 +870,8 @@ const ShopifySettings = () => {
         <button
           type="button"
           onClick={handleResyncOrders}
-          disabled={resyncing || !settings.hasAccessToken}
+          disabled={resyncing || !settings.hasAccessToken || settings.ordersEnabled === false}
+          title={settings.ordersEnabled === false ? 'Order intake is paused' : undefined}
           className="flex items-center gap-2 px-6 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition disabled:opacity-50"
         >
           {resyncing ? (

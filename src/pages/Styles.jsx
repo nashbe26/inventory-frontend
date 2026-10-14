@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { styleService, categoryService } from '../services';
-import { FaPlus, FaTshirt } from 'react-icons/fa';
+import { FaBarcode, FaPlus, FaTshirt } from 'react-icons/fa';
 import {
   PageHeader,
   Button,
@@ -48,6 +48,9 @@ export default function Styles() {
         title="Styles"
         description="Every design in the catalogue. Stock is held on the SKUs beneath each colourway."
       >
+        <Button icon={FaBarcode} onClick={() => navigate('/labels')}>
+          Print labels
+        </Button>
         <Button variant="primary" icon={FaPlus} onClick={() => navigate('/styles/new')}>
           New style
         </Button>

@@ -222,11 +222,16 @@ export function useOrderActions({ onSelectionDone } = {}) {
   /* ---------------------------------------------------------------- Shopify */
 
   const syncShopify = useMutation({
-    mutationFn: () => syncShopifyOrdersAllBatches({ batchSize: 200 }),
+    mutationFn: async () => {
+      const { data } = await api.post('/webhooks/shopify/import-missing-orders');
+      const refreshed = await syncShopifyOrdersAllBatches({ batchSize: 200 });
+      return { ...refreshed, imported: data.data.imported, importFailed: data.data.failed };
+    },
     onSuccess: (r) => {
       refresh();
+      const failed = r.totalFailed + r.importFailed;
       toast.success(
-        `Shopify: ${r.totalUpdated} updated${r.totalFailed ? `, ${r.totalFailed} failed` : ''} (${r.totalMatching} linked)`
+        `Shopify: ${r.imported} new, ${r.totalUpdated} updated${failed ? `, ${failed} failed` : ''} (${r.totalMatching} linked)`
       );
     },
     onError: fail('Shopify sync failed')

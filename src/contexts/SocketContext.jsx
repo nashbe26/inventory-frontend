@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { toast } from 'react-toastify';
 import { useAuth } from './AuthContext';
@@ -37,6 +38,7 @@ const socketUrl = getSocketBaseUrl();
 
 export function SocketProvider({ children }) {
   const { user, loading } = useAuth();
+  const queryClient = useQueryClient();
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
@@ -80,6 +82,9 @@ export function SocketProvider({ children }) {
 
     s.on('newOrder', (data) => {
       toast.info(data.message, { autoClose: 10000 });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orderStats'] });
+      queryClient.invalidateQueries({ queryKey: ['orderStockCheck'] });
     });
     s.on('orderReady', (data) => {
       toast.success(data.message, { autoClose: 10000 });
@@ -92,7 +97,7 @@ export function SocketProvider({ children }) {
     return () => {
       s.disconnect();
     };
-  }, [loading, user]);
+  }, [loading, user, queryClient]);
 
   return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
 }

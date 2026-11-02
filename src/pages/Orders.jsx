@@ -394,7 +394,7 @@ export default function Orders() {
       <PageHeader title="Orders" description="Every order from intake to delivery. Stock leaves the shelf when an order is picked.">
         {isManager && shopifyOrdersOn ? (
           <Button icon={FaSync} disabled={actions.syncShopify.isPending} onClick={() => actions.syncShopify.mutate()}
-            title="Refresh Shopify orders from the store">
+            title="Import any orders the webhook missed, then refresh Shopify orders from the store">
             {actions.syncShopify.isPending ? 'Syncing…' : 'Sync Shopify'}
           </Button>
         ) : null}

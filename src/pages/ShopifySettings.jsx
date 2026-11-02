@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api, { syncShopifyOrdersAllBatches } from '../services/api';
 import { productService } from '../services';
-import SkuPicker from './orders/SkuPicker';
+import ProductMappingReview from './shopify/ProductMappingReview';
 import { toast } from 'react-toastify';
 import {
   FaShopify, FaSave, FaFlask, FaCopy, FaToggleOn, FaToggleOff,
-  FaInfoCircle, FaCheckCircle, FaExclamationTriangle, FaDownload,
-  FaBoxes, FaCheck, FaSyncAlt, FaTimesCircle, FaKey, FaSearch
+  FaInfoCircle, FaCheckCircle, FaExclamationTriangle, FaSyncAlt, FaKey, FaSearch
 } from 'react-icons/fa';
 
 const MAX_SHOPIFY_SELECTED_SYNC = 50;
@@ -40,10 +39,6 @@ const ShopifySettings = () => {
   const [showToken, setShowToken] = useState(false);
   const [showOauthSecret, setShowOauthSecret] = useState(false);
 
-  const [importing, setImporting] = useState(false);
-  const [importResults, setImportResults] = useState(null);
-  /** The "not found" row whose SKU picker is open. */
-  const [pickingVariantId, setPickingVariantId] = useState(null);
   const [resyncing, setResyncing] = useState(false);
   const [resyncResults, setResyncResults] = useState(null);
   const [resyncSkip, setResyncSkip] = useState(0);
@@ -182,20 +177,6 @@ const ShopifySettings = () => {
     }
   };
 
-  const handleImport = async () => {
-    setImporting(true);
-    setImportResults(null);
-    try {
-      const { data } = await api.post('/webhooks/shopify/import-products');
-      setImportResults(data.data);
-      toast.success(data.message);
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Mapping failed');
-    } finally {
-      setImporting(false);
-    }
-  };
-
   const handleResyncOrders = async () => {
     setResyncing(true);
     setResyncResults(null);
@@ -216,61 +197,20 @@ const ShopifySettings = () => {
     }
   };
 
-  const linkVariantToSku = async (row, line) => {
-    const skuLabel = [line.styleName, line.colorName, line.sizeLabel].filter(Boolean).join(' · ');
-    try {
-      await api.post('/webhooks/shopify/link-variant', { variantId: row.variantId, skuId: line.skuId });
-      setImportResults((prev) => ({
-        ...prev,
-        linked: prev.linked + 1,
-        unmatched: prev.unmatched.filter((u) => u.variantId !== row.variantId),
-        mappedByHand: [...(prev.mappedByHand || []), { ...row, skuLabel, skuCode: line.code }]
-      }));
-      setPickingVariantId(null);
-      toast.success(`Mapped to ${skuLabel}`);
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Could not save this mapping');
-    }
-  };
-
-  const undoVariantLink = async (row) => {
-    try {
-      await api.post('/webhooks/shopify/unlink-variant', { variantId: row.variantId });
-      setImportResults((prev) => ({
-        ...prev,
-        linked: prev.linked - 1,
-        unmatched: [...prev.unmatched, row],
-        mappedByHand: prev.mappedByHand.filter((m) => m.variantId !== row.variantId)
-      }));
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Could not undo this mapping');
-    }
-  };
-
-  /** Import products from Shopify, then resync every linked order in batches. */
+  /** Resync every linked order in batches, so they pick up validated mappings. */
   const handleSyncAllData = async () => {
     if (!settings.hasAccessToken) {
       toast.error('Save your Shopify Admin API token first, then try again.');
       return;
     }
     setFullSyncing(true);
-    setImportResults(null);
     setResyncResults(null);
     try {
-      toast.info('Step 1/2: Mapping Shopify products to your catalog…');
-      const importRes = await api.post('/webhooks/shopify/import-products');
-      setImportResults(importRes.data.data);
-      toast.success(importRes.data.message || 'Products mapped');
-
       if (settings.ordersEnabled === false) {
-        const ir = importRes.data?.data || {};
-        toast.info(
-          `Products mapped (${ir.unmatched?.length ?? 0} not found). Orders skipped — order intake is paused.`
-        );
+        toast.info('Order intake is paused, so no orders were refreshed.');
         return;
       }
 
-      toast.info('Step 2/2: Resyncing all Shopify orders…');
       const agg = await syncShopifyOrdersAllBatches({
         updateCustomer: resyncUpdateCustomer,
         batchSize: 200,
@@ -288,10 +228,7 @@ const ShopifySettings = () => {
         skipped: agg.totalSkipped,
         errors: agg.errors.slice(0, 80)
       });
-      const ir = importRes.data?.data || {};
-      toast.success(
-        `Sync complete: ${agg.totalUpdated} order(s) updated · ${ir.unmatched?.length ?? 0} Shopify variant(s) not found in your catalog`
-      );
+      toast.success(`Sync complete: ${agg.totalUpdated} order(s) updated, ${agg.totalProtected} kept as they are`);
     } catch (error) {
       toast.error(error.response?.data?.message || error.message || 'Sync failed');
     } finally {
@@ -356,13 +293,13 @@ const ShopifySettings = () => {
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Sync data from Shopify</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Maps Shopify products to your catalog, then refreshes <strong>all</strong> Shopify-linked orders so line items match it. This can take a minute on large stores.
+              Refreshes <strong>all</strong> Shopify-linked orders so unpicked ones pick up the mappings you validated below. This can take a minute on large stores.
             </p>
           </div>
           <button
             type="button"
             onClick={handleSyncAllData}
-            disabled={fullSyncing || importing || resyncing || !settings.hasAccessToken}
+            disabled={fullSyncing || resyncing || !settings.hasAccessToken}
             className="flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-teal-600 px-6 py-3 font-semibold text-white shadow-md transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {fullSyncing ? (
@@ -593,138 +530,7 @@ const ShopifySettings = () => {
         </button>
       </div>
 
-      {/* Import Products */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-        <div className="flex items-center gap-2">
-          <FaDownload className="text-purple-500" />
-          <h3 className="font-semibold text-gray-900 text-lg">Map Shopify products to your catalog</h3>
-        </div>
-        <p className="text-sm text-gray-500">
-          Links each Shopify variant to the matching SKU in your catalog, by barcode or SKU code, or by product name
-          with colour and size. Nothing is created, and your names, prices and stock stay as they are. Anything that
-          cannot be matched exactly is listed below.
-        </p>
-
-        <button
-          onClick={handleImport}
-          disabled={importing || !settings.hasAccessToken}
-          className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50"
-        >
-          {importing ? (
-            <>
-              <FaSyncAlt className="animate-spin" />
-              Mapping products...
-            </>
-          ) : (
-            <>
-              <FaDownload />
-              Map products
-            </>
-          )}
-        </button>
-
-        {!settings.hasAccessToken && (
-          <p className="text-xs text-orange-600">
-            <strong>Step 1:</strong> Paste your Shopify Admin API token (starts with <code className="bg-orange-100 px-1 rounded">shpat_</code>) in the field above.
-            <br />
-            <strong>Step 2:</strong> Click <strong>Save Settings</strong> — then this button will unlock. (The token is only stored after you save.)
-          </p>
-        )}
-
-        {/* Import Results */}
-        {importResults && (
-          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
-            <h4 className="font-semibold text-gray-800">Mapping Results</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-white p-3 rounded-lg border text-center">
-                <FaBoxes className="text-gray-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-gray-800">{importResults.totalVariants}</p>
-                <p className="text-xs text-gray-500">Shopify variants</p>
-              </div>
-              <div className="bg-white p-3 rounded-lg border text-center">
-                <FaCheck className="text-green-500 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-green-600">{importResults.linked}</p>
-                <p className="text-xs text-gray-500">Newly mapped</p>
-              </div>
-              <div className="bg-white p-3 rounded-lg border text-center">
-                <FaSyncAlt className="text-blue-500 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-blue-600">{importResults.alreadyLinked}</p>
-                <p className="text-xs text-gray-500">Already mapped</p>
-              </div>
-              <div className="bg-white p-3 rounded-lg border text-center">
-                <FaTimesCircle className="text-red-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-red-500">{importResults.unmatched?.length || 0}</p>
-                <p className="text-xs text-gray-500">Not found</p>
-              </div>
-            </div>
-
-            {importResults.unmatched?.length > 0 && (
-              <div className="mt-2">
-                <p className="text-sm font-medium text-amber-800 mb-1">
-                  Not mapped. Orders for these land on the “Unmapped items” placeholder until you choose their SKU:
-                </p>
-                <div className="space-y-1">
-                  {importResults.unmatched.map((u) => (
-                    <div key={u.variantId} className="text-xs text-amber-900 bg-amber-50 px-3 py-1.5 rounded">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="min-w-0">
-                          <strong>{u.product}</strong>{u.variant ? ` · ${u.variant}` : ''}{u.sku ? ` · ${u.sku}` : ''}: {u.reason}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setPickingVariantId(pickingVariantId === u.variantId ? null : u.variantId)}
-                          className="shrink-0 font-medium underline"
-                        >
-                          {pickingVariantId === u.variantId ? 'Cancel' : 'Choose SKU'}
-                        </button>
-                      </div>
-                      {pickingVariantId === u.variantId && (
-                        <div className="mt-2">
-                          <SkuPicker onAdd={(line) => linkVariantToSku(u, line)} />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {importResults.mappedByHand?.length > 0 && (
-              <div className="mt-2">
-                <p className="text-sm font-medium text-green-800 mb-1">
-                  Mapped by hand. New orders use these now. Click Sync data to move existing unpicked orders onto them.
-                </p>
-                <div className="space-y-1">
-                  {importResults.mappedByHand.map((m) => (
-                    <div key={m.variantId} className="flex items-center justify-between gap-3 text-xs text-green-900 bg-green-50 px-3 py-1.5 rounded">
-                      <p className="min-w-0">
-                        <strong>{m.product}</strong>{m.variant ? ` · ${m.variant}` : ''} → {m.skuLabel}{' '}
-                        <span className="font-mono">{m.skuCode}</span>
-                      </p>
-                      <button type="button" onClick={() => undoVariantLink(m)} className="shrink-0 font-medium underline">
-                        Undo
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {importResults.errors?.length > 0 && (
-              <div className="mt-2">
-                <p className="text-sm font-medium text-red-700 mb-1">Errors:</p>
-                <div className="max-h-40 overflow-y-auto space-y-1">
-                  {importResults.errors.map((err, i) => (
-                    <p key={i} className="text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded">
-                      <strong>{err.title}</strong>: {err.error}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <ProductMappingReview hasAccessToken={settings.hasAccessToken} />
 
       {/* Sync selected products from Shopify (no quantities from Shopify) */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">

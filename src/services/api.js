@@ -69,7 +69,7 @@ export const organizationAPI = {
 
 /**
  * Resync all Shopify-linked orders in batches (catalog line items + totals from Shopify).
- * Run after “Import products” so IDs match.
+ * Run after validating product mappings, so unpicked orders pick them up.
  */
 export async function syncShopifyOrdersAllBatches({ updateCustomer = false, batchSize = 200, onBatch } = {}) {
   const cap = Math.min(500, Math.max(1, batchSize));

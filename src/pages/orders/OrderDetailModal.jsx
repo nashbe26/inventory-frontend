@@ -36,7 +36,7 @@ export default function OrderDetailModal({ order, stockByLine, canOps, onEdit, o
   if (!order) return null;
   const c = order.customer || {};
   // The stock check covers confirmed orders: the ones to pack next.
-  const ready = statusOf(order) === ORDER_STATUS.CONFIRMED;
+  const ready = [ORDER_STATUS.CONFIRMED, ORDER_STATUS.PENDING].includes(statusOf(order));
 
   return (
     <Modal isOpen onClose={onClose} title={`Order ${order.orderNumber}`}>
@@ -79,7 +79,7 @@ export default function OrderDetailModal({ order, stockByLine, canOps, onEdit, o
           <h3 className="mb-1 text-base font-medium">Articles</h3>
           {ready ? (
             <p className="mb-2 text-xs text-content-muted">
-              Stock is shared across confirmed orders in the list's priority, after what « Prêt à préparer » orders are taking.
+              Stock is shared across confirmed orders in the list's priority, after what « Prêt à préparer » orders are taking. « En Attente » orders share what is left.
             </p>
           ) : null}
           <div className="table-container">

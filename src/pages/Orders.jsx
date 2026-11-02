@@ -38,6 +38,9 @@ import OrderBulkBar from './orders/OrderBulkBar';
 
 const PAGE_SIZE = 25;
 
+/** Statuses GET /orders/stock-check answers for. */
+const HAS_LIVE_STOCK_CHECK = [ORDER_STATUS.CONFIRMED, ORDER_STATUS.PENDING];
+
 const SHELF = {
   ready: { tone: 'success', label: 'Can be packed' },
   short: { tone: 'danger', label: 'Short' },
@@ -47,10 +50,11 @@ const SHELF = {
 /**
  * Orders — intake, the status pipeline, and the hand-off to delivery.
  *
- * Lines are SKUs (Style → Colourway → Size). For « Confirmé » orders the list
- * shows whether they can be packed from the shelf now. The server decides
- * (GET /orders/stock-check) across every confirmed order, whatever tab or
- * search is showing, so two orders are never both promised the last unit.
+ * Lines are SKUs (Style → Colourway → Size). For « Confirmé » and « En Attente »
+ * orders the list shows whether they can be packed from the shelf now. The server
+ * decides (GET /orders/stock-check) across every such order, whatever tab or search
+ * is showing, so two orders are never both promised the last unit. Confirmed
+ * orders come first; pending ones share what they leave.
  */
 export default function Orders() {
   const { user } = useAuth();
@@ -110,7 +114,7 @@ export default function Orders() {
     return [...seen].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, 'fr'));
   }, [catalog]);
 
-  /** Which confirmed orders can be packed now, shared out in the chosen priority. */
+  /** Which confirmed and pending orders can be packed now, shared out in the chosen priority. */
   const { data: stockCheck } = useQuery({
     queryKey: ['orderStockCheck', priority],
     queryFn: async () => (await api.get('/orders/stock-check', { params: { priority } })).data.data,
@@ -288,7 +292,7 @@ export default function Orders() {
             )}
             <div className="flex flex-wrap gap-1">
               {o.isExchange ? <Badge tone="warning">Exchange</Badge> : null}
-              {o.shortOnStock && statusOf(o) !== ORDER_STATUS.CONFIRMED ? (
+              {o.shortOnStock && !HAS_LIVE_STOCK_CHECK.includes(statusOf(o)) ? (
                 <span title="Saved while an article exceeded available stock">
                   <Badge tone="danger">Saved short</Badge>
                 </span>
@@ -305,7 +309,7 @@ export default function Orders() {
       key: 'shelf',
       header: 'Stock',
       render: (o) => {
-        if (statusOf(o) !== ORDER_STATUS.CONFIRMED) return <span className="text-content-muted">—</span>;
+        if (!HAS_LIVE_STOCK_CHECK.includes(statusOf(o))) return <span className="text-content-muted">—</span>;
         const check = shelf.byOrder.get(idOf(o._id));
         const meta = check ? SHELF[check.state] : null;
         return meta ? (
@@ -458,21 +462,30 @@ export default function Orders() {
           </Toolbar>
         </div>
 
-        {stockCheck?.summary?.confirmed ? (
+        {stockCheck?.summary?.confirmed || stockCheck?.pendingSummary?.pending ? (
           <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-sunken px-3 py-2 text-sm">
-            <span>
-              <strong>{stockCheck.summary.ready}</strong> of {stockCheck.summary.confirmed} confirmed order(s) can be packed now
-              {stockCheck.summary.short ? <> · <span className="text-danger">{stockCheck.summary.short} short on stock</span></> : null}
-              {stockCheck.summary.unknown ? <> · {stockCheck.summary.unknown} with an unknown article</> : null}
-            </span>
+            {stockCheck.summary.confirmed ? (
+              <span>
+                <strong>{stockCheck.summary.ready}</strong> of {stockCheck.summary.confirmed} confirmed order(s) can be packed now
+                {stockCheck.summary.short ? <> · <span className="text-danger">{stockCheck.summary.short} short on stock</span></> : null}
+                {stockCheck.summary.unknown ? <> · {stockCheck.summary.unknown} with an unknown article</> : null}
+              </span>
+            ) : null}
             {stockCheck.summary.ready ? (
               <button type="button" className="underline underline-offset-2"
                 onClick={() => { setTab('Confirmed'); setShelfFilter('ready'); setPage(1); clearSelection(); }}>
                 Show them
               </button>
             ) : null}
+            {stockCheck.pendingSummary?.pending ? (
+              <span>
+                <strong>{stockCheck.pendingSummary.ready}</strong> of {stockCheck.pendingSummary.pending} « En Attente » order(s) can be packed
+                {stockCheck.pendingSummary.short ? <> · <span className="text-danger">{stockCheck.pendingSummary.short} short on stock</span></> : null}
+                {stockCheck.pendingSummary.unknown ? <> · {stockCheck.pendingSummary.unknown} with an unknown article</> : null}
+              </span>
+            ) : null}
             <span className="text-xs text-content-muted">
-              {priority === 'oldest' ? 'Oldest first' : 'Newest first'}; stock being packed for « Prêt à préparer » orders is set aside.
+              {priority === 'oldest' ? 'Oldest first' : 'Newest first'}; stock being packed for « Prêt à préparer » orders is set aside, and confirmed orders come before « En Attente » ones.
             </span>
           </div>
         ) : null}

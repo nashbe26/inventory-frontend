@@ -77,6 +77,7 @@ export async function syncShopifyOrdersAllBatches({ updateCustomer = false, batc
   let totalUpdated = 0;
   let totalFailed = 0;
   let totalSkipped = 0;
+  let totalProtected = 0;
   let totalMatching = 0;
   const errors = [];
 
@@ -91,6 +92,7 @@ export async function syncShopifyOrdersAllBatches({ updateCustomer = false, batc
     totalUpdated += r.updated;
     totalFailed += r.failed;
     totalSkipped += r.skipped;
+    totalProtected += r.protected ?? 0;
     if (Array.isArray(r.errors)) errors.push(...r.errors);
     onBatch?.(r);
     const processed = r.processed ?? 0;
@@ -99,7 +101,7 @@ export async function syncShopifyOrdersAllBatches({ updateCustomer = false, batc
     if (skip >= totalMatching) break;
   }
 
-  return { totalMatching, totalUpdated, totalFailed, totalSkipped, errors };
+  return { totalMatching, totalUpdated, totalFailed, totalSkipped, totalProtected, errors };
 }
 
 export default api;

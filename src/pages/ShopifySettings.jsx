@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api, { syncShopifyOrdersAllBatches } from '../services/api';
 import { productService } from '../services';
+import SkuPicker from './orders/SkuPicker';
 import { toast } from 'react-toastify';
 import {
   FaShopify, FaSave, FaFlask, FaCopy, FaToggleOn, FaToggleOff,
@@ -41,16 +42,14 @@ const ShopifySettings = () => {
 
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState(null);
+  /** The "not found" row whose SKU picker is open. */
+  const [pickingVariantId, setPickingVariantId] = useState(null);
   const [resyncing, setResyncing] = useState(false);
   const [resyncResults, setResyncResults] = useState(null);
   const [resyncSkip, setResyncSkip] = useState(0);
   const [resyncLimit, setResyncLimit] = useState(100);
   const [resyncUpdateCustomer, setResyncUpdateCustomer] = useState(false);
   const [fullSyncing, setFullSyncing] = useState(false);
-  const [categories, setCategories] = useState([]);
-  const [rayons, setRayons] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedRayon, setSelectedRayon] = useState('');
   const [syncPickSearch, setSyncPickSearch] = useState('');
   const [selectedSyncProductIds, setSelectedSyncProductIds] = useState(() => new Set());
   const [selectedSyncResults, setSelectedSyncResults] = useState(null);
@@ -125,7 +124,6 @@ const ShopifySettings = () => {
       window.history.replaceState({}, '', window.location.pathname);
     }
     fetchSettings();
-    fetchCategoriesAndRayons();
   }, []);
 
   const fetchSettings = async () => {
@@ -140,19 +138,6 @@ const ShopifySettings = () => {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchCategoriesAndRayons = async () => {
-    try {
-      const [catRes, rayRes] = await Promise.all([
-        api.get('/categories'),
-        api.get('/rayons')
-      ]);
-      setCategories(catRes.data.data || catRes.data || []);
-      setRayons(rayRes.data.data || rayRes.data || []);
-    } catch {
-      // non-critical
     }
   };
 
@@ -201,15 +186,11 @@ const ShopifySettings = () => {
     setImporting(true);
     setImportResults(null);
     try {
-      const payload = {};
-      if (selectedCategory) payload.categoryId = selectedCategory;
-      if (selectedRayon) payload.rayonId = selectedRayon;
-
-      const { data } = await api.post('/webhooks/shopify/import-products', payload);
+      const { data } = await api.post('/webhooks/shopify/import-products');
       setImportResults(data.data);
       toast.success(data.message);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Import failed');
+      toast.error(error.response?.data?.message || 'Mapping failed');
     } finally {
       setImporting(false);
     }
@@ -235,6 +216,37 @@ const ShopifySettings = () => {
     }
   };
 
+  const linkVariantToSku = async (row, line) => {
+    const skuLabel = [line.styleName, line.colorName, line.sizeLabel].filter(Boolean).join(' · ');
+    try {
+      await api.post('/webhooks/shopify/link-variant', { variantId: row.variantId, skuId: line.skuId });
+      setImportResults((prev) => ({
+        ...prev,
+        linked: prev.linked + 1,
+        unmatched: prev.unmatched.filter((u) => u.variantId !== row.variantId),
+        mappedByHand: [...(prev.mappedByHand || []), { ...row, skuLabel, skuCode: line.code }]
+      }));
+      setPickingVariantId(null);
+      toast.success(`Mapped to ${skuLabel}`);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not save this mapping');
+    }
+  };
+
+  const undoVariantLink = async (row) => {
+    try {
+      await api.post('/webhooks/shopify/unlink-variant', { variantId: row.variantId });
+      setImportResults((prev) => ({
+        ...prev,
+        linked: prev.linked - 1,
+        unmatched: [...prev.unmatched, row],
+        mappedByHand: prev.mappedByHand.filter((m) => m.variantId !== row.variantId)
+      }));
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not undo this mapping');
+    }
+  };
+
   /** Import products from Shopify, then resync every linked order in batches. */
   const handleSyncAllData = async () => {
     if (!settings.hasAccessToken) {
@@ -245,19 +257,15 @@ const ShopifySettings = () => {
     setImportResults(null);
     setResyncResults(null);
     try {
-      const importPayload = {};
-      if (selectedCategory) importPayload.categoryId = selectedCategory;
-      if (selectedRayon) importPayload.rayonId = selectedRayon;
-
-      toast.info('Step 1/2: Importing products from Shopify…');
-      const importRes = await api.post('/webhooks/shopify/import-products', importPayload);
+      toast.info('Step 1/2: Mapping Shopify products to your catalog…');
+      const importRes = await api.post('/webhooks/shopify/import-products');
       setImportResults(importRes.data.data);
-      toast.success(importRes.data.message || 'Products imported');
+      toast.success(importRes.data.message || 'Products mapped');
 
       if (settings.ordersEnabled === false) {
         const ir = importRes.data?.data || {};
         toast.info(
-          `Products synced (${ir.created ?? 0} created · ${ir.updated ?? 0} refreshed). Orders skipped — order intake is paused.`
+          `Products mapped (${ir.unmatched?.length ?? 0} not found). Orders skipped — order intake is paused.`
         );
         return;
       }
@@ -273,15 +281,16 @@ const ShopifySettings = () => {
         skip: agg.totalMatching,
         limit: 200,
         processed:
-          agg.totalUpdated + agg.totalFailed + agg.totalSkipped,
+          agg.totalUpdated + agg.totalProtected + agg.totalFailed + agg.totalSkipped,
         updated: agg.totalUpdated,
+        protected: agg.totalProtected,
         failed: agg.totalFailed,
         skipped: agg.totalSkipped,
         errors: agg.errors.slice(0, 80)
       });
       const ir = importRes.data?.data || {};
       toast.success(
-        `Sync complete: ${agg.totalUpdated} order(s) updated · ${ir.created ?? 0} products created · ${ir.updated ?? 0} products refreshed in catalog`
+        `Sync complete: ${agg.totalUpdated} order(s) updated · ${ir.unmatched?.length ?? 0} Shopify variant(s) not found in your catalog`
       );
     } catch (error) {
       toast.error(error.response?.data?.message || error.message || 'Sync failed');
@@ -347,7 +356,7 @@ const ShopifySettings = () => {
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Sync data from Shopify</h2>
             <p className="mt-1 text-sm text-gray-600">
-              Imports / updates products (using category & rayon below), then refreshes <strong>all</strong> Shopify-linked orders so line items match your catalog. This can take a minute on large stores.
+              Maps Shopify products to your catalog, then refreshes <strong>all</strong> Shopify-linked orders so line items match it. This can take a minute on large stores.
             </p>
           </div>
           <button
@@ -588,41 +597,13 @@ const ShopifySettings = () => {
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <div className="flex items-center gap-2">
           <FaDownload className="text-purple-500" />
-          <h3 className="font-semibold text-gray-900 text-lg">Import Products from Shopify</h3>
+          <h3 className="font-semibold text-gray-900 text-lg">Map Shopify products to your catalog</h3>
         </div>
         <p className="text-sm text-gray-500">
-          Fetch all products from your Shopify store and import them with their SKUs, prices, and variants.
-          Existing products (matched by Shopify ID or SKU) will be updated.
+          Links each Shopify variant to the matching SKU in your catalog, by barcode or SKU code, or by product name
+          with colour and size. Nothing is created, and your names, prices and stock stay as they are. Anything that
+          cannot be matched exactly is listed below.
         </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Default Category</label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
-            >
-              <option value="">Auto-create "Shopify Import"</option>
-              {categories.map(c => (
-                <option key={c._id} value={c._id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Default Rayon</label>
-            <select
-              value={selectedRayon}
-              onChange={(e) => setSelectedRayon(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
-            >
-              <option value="">Auto-create "Shopify"</option>
-              {rayons.map(r => (
-                <option key={r._id} value={r._id}>{r.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
 
         <button
           onClick={handleImport}
@@ -632,12 +613,12 @@ const ShopifySettings = () => {
           {importing ? (
             <>
               <FaSyncAlt className="animate-spin" />
-              Importing products...
+              Mapping products...
             </>
           ) : (
             <>
               <FaDownload />
-              Import All Products
+              Map products
             </>
           )}
         </button>
@@ -653,29 +634,81 @@ const ShopifySettings = () => {
         {/* Import Results */}
         {importResults && (
           <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
-            <h4 className="font-semibold text-gray-800">Import Results</h4>
+            <h4 className="font-semibold text-gray-800">Mapping Results</h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white p-3 rounded-lg border text-center">
                 <FaBoxes className="text-gray-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-gray-800">{importResults.total}</p>
-                <p className="text-xs text-gray-500">Total Found</p>
+                <p className="text-2xl font-bold text-gray-800">{importResults.totalVariants}</p>
+                <p className="text-xs text-gray-500">Shopify variants</p>
               </div>
               <div className="bg-white p-3 rounded-lg border text-center">
                 <FaCheck className="text-green-500 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-green-600">{importResults.created}</p>
-                <p className="text-xs text-gray-500">Created</p>
+                <p className="text-2xl font-bold text-green-600">{importResults.linked}</p>
+                <p className="text-xs text-gray-500">Newly mapped</p>
               </div>
               <div className="bg-white p-3 rounded-lg border text-center">
                 <FaSyncAlt className="text-blue-500 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-blue-600">{importResults.updated}</p>
-                <p className="text-xs text-gray-500">Updated</p>
+                <p className="text-2xl font-bold text-blue-600">{importResults.alreadyLinked}</p>
+                <p className="text-xs text-gray-500">Already mapped</p>
               </div>
               <div className="bg-white p-3 rounded-lg border text-center">
                 <FaTimesCircle className="text-red-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-red-500">{importResults.errors?.length || 0}</p>
-                <p className="text-xs text-gray-500">Errors</p>
+                <p className="text-2xl font-bold text-red-500">{importResults.unmatched?.length || 0}</p>
+                <p className="text-xs text-gray-500">Not found</p>
               </div>
             </div>
+
+            {importResults.unmatched?.length > 0 && (
+              <div className="mt-2">
+                <p className="text-sm font-medium text-amber-800 mb-1">
+                  Not mapped. Orders for these land on the “Unmapped items” placeholder until you choose their SKU:
+                </p>
+                <div className="space-y-1">
+                  {importResults.unmatched.map((u) => (
+                    <div key={u.variantId} className="text-xs text-amber-900 bg-amber-50 px-3 py-1.5 rounded">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="min-w-0">
+                          <strong>{u.product}</strong>{u.variant ? ` · ${u.variant}` : ''}{u.sku ? ` · ${u.sku}` : ''}: {u.reason}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setPickingVariantId(pickingVariantId === u.variantId ? null : u.variantId)}
+                          className="shrink-0 font-medium underline"
+                        >
+                          {pickingVariantId === u.variantId ? 'Cancel' : 'Choose SKU'}
+                        </button>
+                      </div>
+                      {pickingVariantId === u.variantId && (
+                        <div className="mt-2">
+                          <SkuPicker onAdd={(line) => linkVariantToSku(u, line)} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {importResults.mappedByHand?.length > 0 && (
+              <div className="mt-2">
+                <p className="text-sm font-medium text-green-800 mb-1">
+                  Mapped by hand. New orders use these now. Click Sync data to move existing unpicked orders onto them.
+                </p>
+                <div className="space-y-1">
+                  {importResults.mappedByHand.map((m) => (
+                    <div key={m.variantId} className="flex items-center justify-between gap-3 text-xs text-green-900 bg-green-50 px-3 py-1.5 rounded">
+                      <p className="min-w-0">
+                        <strong>{m.product}</strong>{m.variant ? ` · ${m.variant}` : ''} → {m.skuLabel}{' '}
+                        <span className="font-mono">{m.skuCode}</span>
+                      </p>
+                      <button type="button" onClick={() => undoVariantLink(m)} className="shrink-0 font-medium underline">
+                        Undo
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {importResults.errors?.length > 0 && (
               <div className="mt-2">
@@ -893,6 +926,7 @@ const ShopifySettings = () => {
             <p className="text-gray-600">
               Shopify-linked orders in DB: <strong>{resyncResults.totalMatching}</strong>
               {' · '}Updated: <strong className="text-teal-700">{resyncResults.updated}</strong>
+              {' · '}Kept (picked, shipped or edited by hand): <strong>{resyncResults.protected ?? 0}</strong>
               {' · '}Failed: <strong className="text-red-600">{resyncResults.failed}</strong>
               {' · '}Skipped (no lines): <strong>{resyncResults.skipped}</strong>
             </p>

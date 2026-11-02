@@ -231,7 +231,7 @@ export function useOrderActions({ onSelectionDone } = {}) {
       refresh();
       const failed = r.totalFailed + r.importFailed;
       toast.success(
-        `Shopify: ${r.imported} new, ${r.totalUpdated} updated${failed ? `, ${failed} failed` : ''} (${r.totalMatching} linked)`
+        `Shopify: ${r.imported} new, ${r.totalUpdated} updated, ${r.totalProtected} kept${failed ? `, ${failed} failed` : ''} (${r.totalMatching} linked)`
       );
     },
     onError: fail('Shopify sync failed')

@@ -121,6 +121,13 @@ export default function Orders() {
     staleTime: 30 * 1000
   });
 
+  /** The status state machine — so the dropdown offers only legal next statuses. */
+  const { data: transitions } = useQuery({
+    queryKey: ['orderTransitions'],
+    queryFn: async () => (await api.get('/orders/transitions')).data.data,
+    staleTime: 60 * 60 * 1000
+  });
+
   /* -------------------------------------------------------- derived list */
 
   const sorted = useMemo(() => {
@@ -270,7 +277,11 @@ export default function Orders() {
       header: 'Status',
       render: (o) => {
         const status = statusOf(o);
-        const options = SETTABLE_STATUSES.includes(status) ? SETTABLE_STATUSES : [status, ...SETTABLE_STATUSES];
+        // Only the current status plus the legal next moves the dropdown exposes.
+        // Falls back to the full settable list until the state machine loads.
+        const options = transitions
+          ? [status, ...(transitions[status] || []).filter((s) => SETTABLE_STATUSES.includes(s) && s !== status)]
+          : (SETTABLE_STATUSES.includes(status) ? SETTABLE_STATUSES : [status, ...SETTABLE_STATUSES]);
         return (
           <div className="flex flex-col items-start gap-1">
             {canOps ? (

@@ -18,6 +18,63 @@ const LINE_STATE = {
   picked: { tone: 'info', label: 'Picked' }
 };
 
+const SOURCE_LABEL = {
+  manual: 'Manuel',
+  carrier: 'Transporteur',
+  shopify: 'Shopify',
+  system: 'Système'
+};
+
+// Literal text-colour classes (so Tailwind keeps them); the dot fills with currentColor.
+const DOT_TEXT = {
+  success: 'text-success',
+  danger: 'text-danger',
+  warning: 'text-warning',
+  info: 'text-content-secondary',
+  accent: 'text-content-secondary',
+  neutral: 'text-content-secondary'
+};
+
+/** Append-only audit trail of an order's status changes, oldest first. */
+function StatusTimeline({ history }) {
+  if (!Array.isArray(history) || history.length === 0) return null;
+  return (
+    <section>
+      <h3 className="mb-2 text-base font-medium">Historique</h3>
+      <ol className="space-y-3">
+        {history.map((e, i) => {
+          const by = e.by && typeof e.by === 'object' ? e.by.name : null;
+          return (
+            <li key={`${e.at}-${i}`} className="flex gap-3">
+              <div className="flex flex-col items-center">
+                <span
+                  className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${DOT_TEXT[statusTone(e.to)] || 'text-content-secondary'}`}
+                  style={{ backgroundColor: 'currentColor' }}
+                  aria-hidden="true"
+                />
+                {i < history.length - 1 ? <span className="mt-1 w-px flex-1 bg-border" aria-hidden="true" /> : null}
+              </div>
+              <div className="min-w-0 pb-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={statusTone(e.to)}>{e.to}</Badge>
+                  {e.from ? <span className="text-xs text-content-muted">depuis {e.from}</span> : null}
+                  {e.restored > 0 ? <Badge tone="success">+{e.restored} au stock</Badge> : null}
+                </div>
+                <div className="mt-0.5 text-xs text-content-secondary">
+                  {new Date(e.at).toLocaleString('fr-TN')}
+                  {by ? ` · ${by}` : ''}
+                  {e.source && e.source !== 'manual' ? ` · ${SOURCE_LABEL[e.source] || e.source}` : ''}
+                  {e.reason ? ` · ${e.reason}` : ''}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 function Row({ label, children }) {
   if (children == null || children === '') return null;
   return (
@@ -166,6 +223,8 @@ export default function OrderDetailModal({ order, stockByLine, canOps, onEdit, o
             ) : null}
           </section>
         ) : null}
+
+        <StatusTimeline history={order.statusHistory} />
 
         <section className="flex flex-col items-center rounded-lg border border-border p-4">
           <h3 className="mb-2 text-base font-medium">Internal delivery QR</h3>

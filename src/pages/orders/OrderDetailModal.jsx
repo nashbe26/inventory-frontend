@@ -3,7 +3,7 @@ import { FaBan, FaCopy, FaEdit, FaSync } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import Modal from '../../components/Modal';
 import { Badge, Button } from '../../components/ui/Primitives';
-import { dt, idOf, lineLabel, statusOf, statusTone } from './orderModel';
+import { backorderedUnits, dt, idOf, lineLabel, orderBackorder, pickedUnits, pickingStarted, statusOf, statusTone } from './orderModel';
 import { ORDER_STATUS } from '../../config/orderStatus';
 
 const copy = (text, what) => {
@@ -103,6 +103,7 @@ export default function OrderDetailModal({ order, stockByLine, canOps, onEdit, o
           {order.isExchange ? <Badge tone="warning">Exchange</Badge> : null}
           {order.isBundleOrder ? <Badge tone="accent">Bundle</Badge> : null}
           {order.shortOnStock ? <Badge tone="danger">Saved short on stock</Badge> : null}
+          {orderBackorder(order) > 0 ? <Badge tone="warning">Reliquat {orderBackorder(order)}</Badge> : null}
           <button
             type="button"
             className="inline-flex items-center gap-1.5 rounded bg-surface-sunken px-2 py-0.5 font-mono text-sm"
@@ -162,6 +163,12 @@ export default function OrderDetailModal({ order, stockByLine, canOps, onEdit, o
                         {item.availableAtOrder != null && item.availableAtOrder < item.quantity ? (
                           <div className="text-xs text-danger">
                             Only {item.availableAtOrder} available when ordered
+                          </div>
+                        ) : null}
+                        {pickingStarted(order) ? (
+                          <div className={`text-xs ${backorderedUnits(order, item) > 0 ? 'text-warning' : 'text-content-muted'}`}>
+                            Préparé {pickedUnits(item)}/{item.quantity}
+                            {backorderedUnits(order, item) > 0 ? ` · Reliquat ${backorderedUnits(order, item)}` : ''}
                           </div>
                         ) : null}
                       </td>

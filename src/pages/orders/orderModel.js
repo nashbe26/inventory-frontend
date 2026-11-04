@@ -64,6 +64,44 @@ export const statusOf = (order) => normaliseOrderStatus(order?.status || '') || 
 export const statusTone = (status) => STATUS_TONE[normaliseOrderStatus(status)] || 'neutral';
 export const isReadyToPick = (order) => statusOf(order) === ORDER_STATUS.READY_TO_PICK;
 
+/* -------------------------------------------------------- pick progress */
+
+/** Statuses at or past the pick step — stock has been (at least partly) taken. */
+const PICKED_ONWARDS = [
+  ORDER_STATUS.PICKED,
+  ORDER_STATUS.PRINTED,
+  ORDER_STATUS.HANDED_TO_CARRIER,
+  ORDER_STATUS.SHIPPED,
+  ORDER_STATUS.OUT_FOR_DELIVERY,
+  ORDER_STATUS.DELIVERED
+];
+
+/**
+ * Units of a line actually picked off the shelf. Mirrors the server's legacy
+ * fallback: a line from before `quantityPicked` existed counts as fully picked
+ * when its `stockDeductedAtPrepare` flag is set, and as unpicked otherwise.
+ */
+export const pickedUnits = (item) => {
+  const qty = Number(item?.quantity) || 0;
+  if (item?.quantityPicked != null) return Math.min(qty, Math.max(0, Number(item.quantityPicked) || 0));
+  return item?.stockDeductedAtPrepare ? qty : 0;
+};
+
+/** Has picking started on this order — any units taken, or it is past the pick step? */
+export const pickingStarted = (order) =>
+  PICKED_ONWARDS.includes(statusOf(order)) || (order?.items || []).some((it) => pickedUnits(it) > 0);
+
+/**
+ * Backordered units on a line: ordered minus picked, but only once picking has
+ * started (a not-yet-picked order is not "in backorder", it is simply waiting).
+ */
+export const backorderedUnits = (order, item) =>
+  pickingStarted(order) ? Math.max(0, (Number(item?.quantity) || 0) - pickedUnits(item)) : 0;
+
+/** Total backordered units across the whole order (0 when picking hasn't started). */
+export const orderBackorder = (order) =>
+  (order?.items || []).reduce((n, it) => n + backorderedUnits(order, it), 0);
+
 /* ------------------------------------------------------------- customer */
 
 export const GOVERNORATES = [

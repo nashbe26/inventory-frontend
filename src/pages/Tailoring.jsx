@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { FaCheck, FaCut } from 'react-icons/fa';
+import { FaCheck, FaCut, FaSearch } from 'react-icons/fa';
 import { tailoringService } from '../services';
 import { Badge, Button, DataTable, EmptyState, PageHeader, Tabs } from '../components/ui/Primitives';
 import { ORDER_STATUS } from '../config/orderStatus';
@@ -58,6 +58,19 @@ export default function Tailoring() {
     mutationFor((job) => tailoringService.tailored(job._id), (j) => `${j.quantity} × ${j.skuCode} added to stock`)
   );
   const cancel = useMutation(mutationFor((job) => tailoringService.cancel(job._id), (j) => `${j.skuCode} cancelled`));
+
+  const checkOrders = useMutation({
+    mutationFn: () => tailoringService.checkOpenOrders(),
+    onSuccess: (res) => {
+      const { checked, listed, failed } = res.data.data;
+      queryClient.invalidateQueries({ queryKey: ['tailoring'] });
+      const summary = `${checked} open order(s) checked, ${listed} article(s) added to the list`;
+      if (failed) toast.warning(`${summary}, ${failed} failed`);
+      else toast.success(summary);
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Could not check open orders')
+  });
+
   const busy = cut.isPending || tailored.isPending || cancel.isPending;
 
   const tab = (value, label) => ({ value, label, count: counts?.[value] });
@@ -133,7 +146,16 @@ export default function Tailoring() {
       <PageHeader
         title="Tailoring"
         description="Articles to make because a new Shopify order wanted more than the stock could cover. Marking one tailored adds it to stock."
-      />
+      >
+        <Button
+          icon={FaSearch}
+          onClick={() => checkOrders.mutate()}
+          disabled={checkOrders.isPending}
+          title="List what open Shopify orders still need and the stock cannot cover"
+        >
+          {checkOrders.isPending ? 'Checking…' : 'Check open orders'}
+        </Button>
+      </PageHeader>
 
       <Tabs
         className="mb-4"

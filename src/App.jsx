@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
-import PrivateRoute from './components/PrivateRoute'
+import PrivateRoute, { homeFor } from './components/PrivateRoute'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Profile from './pages/Profile'
@@ -63,6 +63,11 @@ const OFFICE = ['admin', 'manager', 'staff']
 const MANAGEMENT = ['admin', 'manager']
 const DELIVERY = ['admin', 'manager', 'delivery_man']
 
+function HomeRedirect() {
+  const { user } = useAuth()
+  return <Navigate to={homeFor(user?.role)} replace />
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -84,7 +89,9 @@ function App() {
             </PrivateRoute>
           }
         >
-          <Route index element={<PrivateRoute deny={['staff']}><Dashboard /></PrivateRoute>} />
+          {/* The dashboard is hidden from the sidebar, so "/" sends each role to its daily page. */}
+          <Route index element={<HomeRedirect />} />
+          <Route path="dashboard" element={<PrivateRoute deny={['staff']}><Dashboard /></PrivateRoute>} />
           <Route path="profile" element={<Profile />} />
           <Route path="time-clock" element={<TimeClock />} />
           <Route path="scanner" element={<Navigate to="/prepare-scan" replace />} />

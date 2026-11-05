@@ -43,6 +43,11 @@ import {
 // every route now carries the role set its server counterpart enforces.
 // Layout is back to deciding what to *show*, not what to permit.
 
+// Pages kept but taken out of the sidebar: Dashboard, Time clock, Team chat and
+// Stock count. Their routes and code are untouched; set this to true to bring
+// all their links back.
+const SHOW_HIDDEN_NAV = false;
+
 export default function Layout() {
   const { user, logout } = useAuth();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -96,11 +101,13 @@ export default function Layout() {
           <ul className="sidebar-nav">
             {user?.role === 'delivery_man' ? (
                 <>
+                    {SHOW_HIDDEN_NAV && (
                     <li>
                         <NavLink to="/time-clock" className={({ isActive }) => isActive ? 'active' : ''}>
                           <FaClock /> Time clock
                         </NavLink>
                     </li>
+                    )}
                     <li>
                         <NavLink to="/delivery-dashboard" className={({ isActive }) => isActive ? 'active' : ''}>
                           <FaTruck /> My Dashboard
@@ -116,14 +123,18 @@ export default function Layout() {
                       <FaChartBar /> Performance
                     </NavLink>
                   </li>
+                  {SHOW_HIDDEN_NAV && (
                   <li>
                     <NavLink to="/chat" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaComments /> Team chat
                     </NavLink>
                   </li>
+                  )}
                 </>
             ) : user?.role === 'staff' ? (
                 <>
+                  {SHOW_HIDDEN_NAV && (
+                  <>
                   <li>
                     <NavLink to="/time-clock" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaClock /> Time clock
@@ -134,6 +145,8 @@ export default function Layout() {
                       <FaComments /> Team chat
                     </NavLink>
                   </li>
+                  </>
+                  )}
                   <li className="menu-group">
                     <div className="menu-group-header" onClick={() => toggleGroup('operations')}>
                       <span className="group-label">
@@ -205,11 +218,13 @@ export default function Layout() {
                             <FaSignOutAlt /> Stock out
                           </NavLink>
                         </li>
+                        {SHOW_HIDDEN_NAV && (
                         <li>
                           <NavLink to="/stock/count" className={({ isActive }) => isActive ? 'active' : ''}>
                             <FaClipboardList /> Stock count
                           </NavLink>
                         </li>
+                        )}
                         <li>
                           <NavLink to="/stock/movements" className={({ isActive }) => isActive ? 'active' : ''}>
                             <FaHistory /> Stock movements
@@ -266,6 +281,8 @@ export default function Layout() {
                 </>
             ) : (
                 <>
+            {SHOW_HIDDEN_NAV && (
+            <>
             <li>
               <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaHome /> Dashboard
@@ -281,6 +298,8 @@ export default function Layout() {
                 <FaComments /> Team chat
               </NavLink>
             </li>
+            </>
+            )}
             <li>
               <NavLink to="/organization" className={({ isActive }) => isActive ? 'active' : ''}>
                 <FaCogs /> Organization
@@ -407,11 +426,13 @@ export default function Layout() {
                       <FaSignOutAlt /> Stock out
                     </NavLink>
                   </li>
+                  {SHOW_HIDDEN_NAV && (
                   <li>
                     <NavLink to="/stock/count" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaClipboardList /> Stock count
                     </NavLink>
                   </li>
+                  )}
                   <li>
                     <NavLink to="/stock/movements" className={({ isActive }) => isActive ? 'active' : ''}>
                       <FaHistory /> Stock movements

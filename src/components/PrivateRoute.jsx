@@ -22,9 +22,8 @@ import { useAuth } from '../contexts/AuthContext';
  * route that role is allowed to reach, or the redirect loops.
  */
 export function homeFor(role) {
-  if (role === 'staff') return '/prepare-scan';
   if (role === 'delivery_man') return '/delivery-dashboard';
-  if (role === 'admin' || role === 'manager') return '/orders';
+  if (role === 'admin' || role === 'manager' || role === 'staff') return '/orders';
   // Roles that cannot open /orders (e.g. supplier) still land on the dashboard.
   return '/dashboard';
 }

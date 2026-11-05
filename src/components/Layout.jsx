@@ -43,10 +43,11 @@ import {
 // every route now carries the role set its server counterpart enforces.
 // Layout is back to deciding what to *show*, not what to permit.
 
-// Pages kept but taken out of the sidebar: Dashboard, Time clock, Team chat and
-// Stock count. Their routes and code are untouched; set this to true to bring
-// all their links back.
+// The sidebar is cut down to Orders (and Logout). Every other page keeps its route
+// and code and still opens by URL; set this to true to bring all the links back.
+// Delivery staff keep their own menu, because they cannot open Orders.
 const SHOW_HIDDEN_NAV = false;
+const ORDERS_ROLES = ['admin', 'manager', 'staff'];
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -99,7 +100,15 @@ export default function Layout() {
           if (e.target.closest('a')) setSidebarOpen(false);
         }}>
           <ul className="sidebar-nav">
-            {user?.role === 'delivery_man' ? (
+            {!SHOW_HIDDEN_NAV && user?.role !== 'delivery_man' ? (
+                ORDERS_ROLES.includes(user?.role) && (
+                  <li>
+                    <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}>
+                      <FaShoppingCart /> Orders
+                    </NavLink>
+                  </li>
+                )
+            ) : user?.role === 'delivery_man' ? (
                 <>
                     {SHOW_HIDDEN_NAV && (
                     <li>
@@ -493,14 +502,16 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
-          {(user?.role === 'admin' || user?.role === 'manager') && (
+          {SHOW_HIDDEN_NAV && (user?.role === 'admin' || user?.role === 'manager') && (
             <NavLink to="/shopify-settings" className={({ isActive }) => isActive ? 'active' : ''}>
               <FaShopify /> Shopify
             </NavLink>
           )}
+          {SHOW_HIDDEN_NAV && (
           <NavLink to="/profile" className={({ isActive }) => isActive ? 'active' : ''}>
             <FaUser /> Profile
           </NavLink>
+          )}
           <button onClick={logout} className="logout-btn">
             <FaSignOutAlt /> Logout
           </button>

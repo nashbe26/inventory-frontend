@@ -43,9 +43,11 @@ import {
 // every route now carries the role set its server counterpart enforces.
 // Layout is back to deciding what to *show*, not what to permit.
 
-// The sidebar is cut down to Orders (and Logout). Every other page keeps its route
-// and code and still opens by URL; set this to true to bring all the links back.
-// Delivery staff keep their own menu, because they cannot open Orders.
+// The sidebar is cut down to Orders, Inventory Management, Organization, Shopify
+// and Logout. Every other page (the rest of Daily Operations, Dashboard, Time
+// clock, Team chat, Stock count, Profile) keeps its route and code and still
+// opens by URL; set this to true to bring all the links back. Delivery staff keep
+// their own menu, because they cannot open Orders.
 const SHOW_HIDDEN_NAV = false;
 const ORDERS_ROLES = ['admin', 'manager', 'staff'];
 
@@ -58,6 +60,14 @@ export default function Layout() {
     inventory: true,
     delivery: true
   });
+
+  const ordersLink = !SHOW_HIDDEN_NAV && (
+    <li>
+      <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}>
+        <FaShoppingCart /> Orders
+      </NavLink>
+    </li>
+  );
 
   const toggleGroup = (group) => {
     setExpandedGroups(prev => ({
@@ -100,15 +110,7 @@ export default function Layout() {
           if (e.target.closest('a')) setSidebarOpen(false);
         }}>
           <ul className="sidebar-nav">
-            {!SHOW_HIDDEN_NAV && user?.role !== 'delivery_man' ? (
-                ORDERS_ROLES.includes(user?.role) && (
-                  <li>
-                    <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}>
-                      <FaShoppingCart /> Orders
-                    </NavLink>
-                  </li>
-                )
-            ) : user?.role === 'delivery_man' ? (
+            {!SHOW_HIDDEN_NAV && user?.role !== 'delivery_man' && !ORDERS_ROLES.includes(user?.role) ? null : user?.role === 'delivery_man' ? (
                 <>
                     {SHOW_HIDDEN_NAV && (
                     <li>
@@ -156,6 +158,8 @@ export default function Layout() {
                   </li>
                   </>
                   )}
+                  {ordersLink}
+                  {SHOW_HIDDEN_NAV && (
                   <li className="menu-group">
                     <div className="menu-group-header" onClick={() => toggleGroup('operations')}>
                       <span className="group-label">
@@ -208,6 +212,7 @@ export default function Layout() {
                       </ul>
                     )}
                   </li>
+                  )}
                   <li className="menu-group">
                     <div className="menu-group-header" onClick={() => toggleGroup('inventory')}>
                       <span className="group-label">
@@ -316,6 +321,8 @@ export default function Layout() {
             </li>
 
             {/* Operations Group */}
+            {ordersLink}
+            {SHOW_HIDDEN_NAV && (
             <li className="menu-group">
               <div className="menu-group-header" onClick={() => toggleGroup('operations')}>
                 <span className="group-label">
@@ -376,6 +383,7 @@ export default function Layout() {
                 </ul>
               )}
             </li>
+            )}
 
             {/* Delivery Zone Group */}
             {(user?.role === 'delivery_man') && (
@@ -502,7 +510,7 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
-          {SHOW_HIDDEN_NAV && (user?.role === 'admin' || user?.role === 'manager') && (
+          {(user?.role === 'admin' || user?.role === 'manager') && (
             <NavLink to="/shopify-settings" className={({ isActive }) => isActive ? 'active' : ''}>
               <FaShopify /> Shopify
             </NavLink>

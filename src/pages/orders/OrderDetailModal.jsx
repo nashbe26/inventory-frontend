@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { QRCodeCanvas } from 'qrcode.react';
 import { FaBan, FaCopy, FaEdit, FaSync } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -5,6 +6,7 @@ import Modal from '../../components/Modal';
 import { Badge, Button } from '../../components/ui/Primitives';
 import { backorderedUnits, dt, idOf, lineLabel, orderBackorder, pickedUnits, pickingStarted, statusOf, statusTone } from './orderModel';
 import { ORDER_STATUS } from '../../config/orderStatus';
+import { tailoringService } from '../../services';
 
 const copy = (text, what) => {
   navigator.clipboard.writeText(text);
@@ -89,7 +91,20 @@ function Row({ label, children }) {
  * One order in full: customer, articles with their shelf state, carrier
  * details, the internal-delivery QR, and the totals.
  */
+const TAILORING_STATE = {
+  to_cut: { label: 'to cut', tone: 'warning' },
+  cut: { label: 'to sew', tone: 'info' },
+  tailored: { label: 'tailored', tone: 'success' },
+  cancelled: { label: 'cancelled', tone: 'neutral' }
+};
+
 export default function OrderDetailModal({ order, stockByLine, canOps, onEdit, onClose, actions }) {
+  const { data: tailoringJobs } = useQuery({
+    queryKey: ['tailoring', 'order', order?._id],
+    queryFn: async () => (await tailoringService.list({ orderId: order._id })).data.data,
+    enabled: Boolean(order?._id && canOps)
+  });
+
   if (!order) return null;
   const c = order.customer || {};
   // The stock check covers confirmed orders: the ones to pack next.
@@ -171,6 +186,15 @@ export default function OrderDetailModal({ order, stockByLine, canOps, onEdit, o
                             {backorderedUnits(order, item) > 0 ? ` · Reliquat ${backorderedUnits(order, item)}` : ''}
                           </div>
                         ) : null}
+                        {(tailoringJobs || [])
+                          .filter((job) => idOf(job.skuId) === idOf(item.skuId))
+                          .map((job) => (
+                            <div key={job._id} className="mt-1">
+                              <Badge tone={TAILORING_STATE[job.status]?.tone}>
+                                Tailoring: {job.quantity} {TAILORING_STATE[job.status]?.label}
+                              </Badge>
+                            </div>
+                          ))}
                       </td>
                       <td className="num tabular-nums">{item.quantity}</td>
                       <td className="num tabular-nums">{dt(item.unitPrice)}</td>

@@ -29,7 +29,8 @@ import {
   FaBoxOpen,
   FaChartPie,
   FaClock,
-  FaComments
+  FaComments,
+  FaCut
 } from 'react-icons/fa'
 
 // Access used to be decided here, by matching the pathname against a list of
@@ -43,8 +44,8 @@ import {
 // every route now carries the role set its server counterpart enforces.
 // Layout is back to deciding what to *show*, not what to permit.
 
-// The sidebar is cut down to Orders, Inventory Management, Organization, Shopify
-// and Logout. Every other page (the rest of Daily Operations, Dashboard, Time
+// The sidebar is cut down to Orders, Tailoring, Inventory Management, Organization,
+// Shopify and Logout. Every other page (the rest of Daily Operations, Dashboard, Time
 // clock, Team chat, Stock count, Profile) keeps its route and code and still
 // opens by URL; set this to true to bring all the links back. Delivery staff keep
 // their own menu, because they cannot open Orders.
@@ -65,6 +66,14 @@ export default function Layout() {
     <li>
       <NavLink to="/orders" className={({ isActive }) => isActive ? 'active' : ''}>
         <FaShoppingCart /> Orders
+      </NavLink>
+    </li>
+  );
+
+  const tailoringLink = (
+    <li>
+      <NavLink to="/tailoring" className={({ isActive }) => isActive ? 'active' : ''}>
+        <FaCut /> Tailoring
       </NavLink>
     </li>
   );
@@ -159,6 +168,8 @@ export default function Layout() {
                   </>
                   )}
                   {ordersLink}
+            {tailoringLink}
+                  {tailoringLink}
                   {SHOW_HIDDEN_NAV && (
                   <li className="menu-group">
                     <div className="menu-group-header" onClick={() => toggleGroup('operations')}>

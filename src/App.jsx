@@ -28,6 +28,7 @@ import PrepareScan from './pages/PrepareScan'
 import History from './pages/History'
 import BulkGeneration from './pages/BulkGeneration'
 import Orders from './pages/Orders'
+import Tailoring from './pages/Tailoring'
 import OrderImport from './pages/OrderImport'
 import OrderAnalytics from './pages/OrderAnalytics'
 import Materials from './pages/Materials'
@@ -120,6 +121,7 @@ function App() {
           <Route path="products/edit/:id" element={<PrivateRoute allow={OFFICE}><ProductForm /></PrivateRoute>} />
           <Route path="products/:id" element={<PrivateRoute allow={OFFICE}><ProductDetails /></PrivateRoute>} />
           <Route path="orders" element={<PrivateRoute allow={OFFICE}><Orders /></PrivateRoute>} />
+          <Route path="tailoring" element={<PrivateRoute allow={OFFICE}><Tailoring /></PrivateRoute>} />
           <Route path="orders/import" element={<PrivateRoute allow={OFFICE}><OrderImport /></PrivateRoute>} />
           <Route path="order-analytics" element={<PrivateRoute allow={OFFICE}><OrderAnalytics /></PrivateRoute>} />
           <Route path="pickups" element={<PrivateRoute allow={OFFICE}><Pickups /></PrivateRoute>} />

@@ -96,6 +96,13 @@ export const styleService = {
 };
 
 /** Every call here appends to the append-only stock movement ledger. */
+export const tailoringService = {
+  list: (params) => api.get('/tailoring', { params: pruneEmpty(params) }),
+  cut: (id) => api.post(`/tailoring/${id}/cut`),
+  tailored: (id) => api.post(`/tailoring/${id}/tailored`),
+  cancel: (id, reason) => api.post(`/tailoring/${id}/cancel`, { reason })
+};
+
 export const stockService = {
   summary: () => api.get('/stock/summary'),
   lowStock: () => api.get('/stock/low-stock'),

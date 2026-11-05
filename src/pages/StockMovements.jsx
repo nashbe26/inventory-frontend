@@ -17,6 +17,7 @@ import {
 /** Movement types, grouped the way someone reading the ledger thinks about them. */
 const TYPES = [
   { value: 'receipt', label: 'Receipt' },
+  { value: 'production_in', label: 'Tailored' },
   { value: 'sale', label: 'Sale' },
   { value: 'return_in', label: 'Return in' },
   { value: 'return_out', label: 'Return out' },
@@ -28,6 +29,7 @@ const TYPES = [
 
 const TYPE_TONE = {
   receipt: 'success',
+  production_in: 'success',
   return_in: 'success',
   transfer_in: 'neutral',
   adjustment_in: 'info',

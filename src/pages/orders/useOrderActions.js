@@ -225,13 +225,13 @@ export function useOrderActions({ onSelectionDone } = {}) {
     mutationFn: async () => {
       const { data } = await api.post('/webhooks/shopify/import-missing-orders');
       const refreshed = await syncShopifyOrdersAllBatches({ batchSize: 200 });
-      return { ...refreshed, imported: data.data.imported, importFailed: data.data.failed };
+      return { ...refreshed, imported: data.data.imported, importFailed: data.data.failed, tailoring: data.data.tailoringJobs };
     },
     onSuccess: (r) => {
       refresh();
       const failed = r.totalFailed + r.importFailed;
       toast.success(
-        `Shopify: ${r.imported} new, ${r.totalUpdated} updated, ${r.totalProtected} kept${failed ? `, ${failed} failed` : ''} (${r.totalMatching} linked)`
+        `Shopify: ${r.imported} new, ${r.totalUpdated} updated, ${r.totalProtected} kept${r.tailoring ? `, ${r.tailoring} to tailoring` : ''}${failed ? `, ${failed} failed` : ''} (${r.totalMatching} linked)`
       );
     },
     onError: fail('Shopify sync failed')

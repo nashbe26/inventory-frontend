@@ -168,7 +168,6 @@ export default function Layout() {
                   </>
                   )}
                   {ordersLink}
-            {tailoringLink}
                   {tailoringLink}
                   {SHOW_HIDDEN_NAV && (
                   <li className="menu-group">
@@ -333,6 +332,7 @@ export default function Layout() {
 
             {/* Operations Group */}
             {ordersLink}
+            {tailoringLink}
             {SHOW_HIDDEN_NAV && (
             <li className="menu-group">
               <div className="menu-group-header" onClick={() => toggleGroup('operations')}>
